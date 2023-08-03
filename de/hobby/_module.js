@@ -4212,8 +4212,8 @@ function create_fragment$4(ctx) {
 					"label": "",
 					"active": false
 				},
-				leftlabel: "",
-				rightlabel: ""
+				leftlabel: "Karriere",
+				rightlabel: "Hobbys"
 			}
 		});
 

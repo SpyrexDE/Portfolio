@@ -4212,8 +4212,8 @@ function create_fragment$4(ctx) {
 					"url": "/hobby",
 					"active": false
 				},
-				leftlabel: "",
-				rightlabel: ""
+				leftlabel: "Career",
+				rightlabel: "Hobbys"
 			}
 		});
 

@@ -4527,7 +4527,7 @@ function create_fragment$5(ctx) {
 					"label": "",
 					"active": false
 				},
-				leftlabel: "Projekte",
+				leftlabel: "Karriere",
 				rightlabel: "Hobbys"
 			}
 		});
