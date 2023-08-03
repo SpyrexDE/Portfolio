@@ -4518,9 +4518,9 @@ function create_fragment$5(ctx) {
 					"size": 422
 				},
 				career_link: { "label": "", "url": "", "active": false },
-				hobby_link: { "url": "", "label": "", "active": false },
-				leftlabel: "",
-				rightlabel: ""
+				hobby_link: { "label": "", "url": "", "active": false },
+				leftlabel: "Karriere",
+				rightlabel: "Hobby"
 			}
 		});
 
