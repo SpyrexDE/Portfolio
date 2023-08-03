@@ -4517,10 +4517,10 @@ function create_fragment$5(ctx) {
 					"url": "https://snmjgwmbisbdshitvcmi.supabase.co/storage/v1/object/public/images/c4b279d1-26c1-48a7-b42d-92748ab1745f/1690810871446hobby.png",
 					"size": 422
 				},
-				career_link: { "label": "", "url": "", "active": false },
-				hobby_link: { "label": "", "url": "", "active": false },
-				leftlabel: "Karriere",
-				rightlabel: "Hobby"
+				career_link: { "url": "", "label": "", "active": false },
+				hobby_link: { "url": "", "label": "", "active": false },
+				leftlabel: "Projekte",
+				rightlabel: "Hobbys"
 			}
 		});
 
