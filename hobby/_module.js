@@ -4202,8 +4202,16 @@ function create_fragment$4(ctx) {
 					"url": "https://snmjgwmbisbdshitvcmi.supabase.co/storage/v1/object/public/images/c4b279d1-26c1-48a7-b42d-92748ab1745f/1690810871446hobby.png",
 					"size": 422
 				},
-				career_link: { "url": "", "label": "", "active": false },
-				hobby_link: { "url": "", "label": "" },
+				career_link: {
+					"label": "",
+					"url": "/career",
+					"active": false
+				},
+				hobby_link: {
+					"label": "",
+					"url": "/hobby",
+					"active": false
+				},
 				leftlabel: "",
 				rightlabel: ""
 			}
