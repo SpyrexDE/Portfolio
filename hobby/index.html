@@ -1,0 +1,122 @@
+
+  <!DOCTYPE html>
+  <html lang="en">
+    <head>
+      <meta name="generator" content="Primo" />
+      <title>Portfolio</title><!-- HEAD_svelte-unsna_START --><link rel="shortcut icon" type="image/jpg" sizes="32x32" href="https://snmjgwmbisbdshitvcmi.supabase.co/storage/v1/object/public/images/c4b279d1-26c1-48a7-b42d-92748ab1745f/1612183359674diamondIcon.svg"><link rel="preconnect" href="https://fonts.bunny.net"><link href="https://fonts.bunny.net/css?family=inter:100,200,300,400,500,600,700,800,900" rel="stylesheet"><link href="https://fonts.bunny.net/css?family=merriweather:300,300i,400,400i,700,700i,900,900i" rel="stylesheet"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.4.0/dist/themes/light.css"><script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.4.0/dist/shoelace-autoloader.js"></script><link rel="shortcut icon" type="image/jpg" sizes="32x32" href="https://snmjgwmbisbdshitvcmi.supabase.co/storage/v1/object/public/images/c4b279d1-26c1-48a7-b42d-92748ab1745f/1612183359674diamondIcon.svg"><meta name="description" content="Portfolio of Fabian Kessler"><meta property="og:image" content="https://snmjgwmbisbdshitvcmi.supabase.co/storage/v1/object/public/images/c4b279d1-26c1-48a7-b42d-92748ab1745f/1612183359674diamondIcon.svg">
+  <meta name="twitter:image" content="https://snmjgwmbisbdshitvcmi.supabase.co/storage/v1/object/public/images/c4b279d1-26c1-48a7-b42d-92748ab1745f/1612183359674diamondIcon.svg"><style>/* Reset & standardize default styles */
+@import url("https://unpkg.com/@primo-app/primo@1.3.64/reset.css") layer;
+
+/* Design tokens (apply to components) */
+:root {
+  /* Custom theme options */
+  --color-accent: white;
+  --color-accent2: #260055;
+  --color-shade: #999999;
+
+  --inner-max-width: 800px;
+
+  /* Base values */
+  --box-shadow: 0px 2px 8px rgba(0, 0, 0, 0.1);
+  --border-radius: 2px;
+  --border-color: #e0e1e1;
+  --body-font: "Merriweather", serif;
+  --heading-font: "Inter", sans-serif;
+
+  --header-height: 92.8px;
+}
+
+/* Root element (use instead of `body`) */
+#page {
+  font-family: var(--heading-font);
+  color: white;
+  line-height: 1.5;
+  font-size: 1.125rem;
+  background: black;
+}
+
+/* Elements */
+.section-container {
+  max-width: 1150px;
+  margin: 0 auto;
+  padding: 5rem 2rem;
+}
+
+a.link {
+  line-height: 1.3;
+  border-bottom: 2px solid var(--color-accent);
+  transform: translateY(-2px); /* move link back into place */
+  transition: var(--transition, 0.1s border);
+}
+
+a.link:hover {
+    border-color: transparent;
+  }
+
+.heading {
+  font-size: clamp(2rem, 10vw, 3rem);
+  line-height: 1.1;
+  font-weight: 600;
+  letter-spacing: -0.15rem;
+}
+
+.button {
+  color: white;
+  background: var(--color-accent, rebeccapurple);
+  border-radius: 0;
+  padding: 1px 24px;
+  transition: var(--transition, 0.1s box-shadow);
+  border: 0; /* reset */
+  border-radius: 0.25rem;
+  font-size: 1rem;
+}
+
+.button:hover {
+    box-shadow: 0 0 0 2px var(--color-accent, rebeccapurple);
+  }
+
+.button.inverted {
+    background: transparent;
+    color: var(--color-accent, rebeccapurple);
+  }
+
+</style><!-- HEAD_svelte-unsna_END -->
+      <style>.section-container.svelte-40bdid.svelte-40bdid{display:flex;justify-content:space-between;align-items:center;padding-block:2rem}.logo.svelte-40bdid.svelte-40bdid{font-size:1.5rem;font-weight:600;line-height:1.2}.desktop-nav.svelte-40bdid.svelte-40bdid{display:none;align-items:center;justify-content:space-between;width:100%}.desktop-nav.svelte-40bdid nav.svelte-40bdid{display:flex;gap:1.75rem}.desktop-nav.svelte-40bdid nav a.link.svelte-40bdid{border-color:transparent;transition:border-color 0.1s;font-size:0.95rem;font-weight:500}.desktop-nav.svelte-40bdid nav a.link.svelte-40bdid:hover,.desktop-nav.svelte-40bdid nav a.link .active.svelte-40bdid{border-color:initial}@media(min-width: 800px){.desktop-nav.svelte-40bdid.svelte-40bdid{display:flex
+}}.mobile-nav.svelte-40bdid.svelte-40bdid{display:flex;align-items:center;justify-content:space-between;width:100%;font-weight:500}@media(min-width: 800px){.mobile-nav.svelte-40bdid.svelte-40bdid{display:none
+}}#popup.svelte-40bdid.svelte-40bdid{font-size:1.25rem;display:grid;gap:1rem;position:absolute;text-align:center;background-color:var(--background-color);box-shadow:var(--box-shadow, 0px 4px 30px rgba(0, 0, 0, 0.1));border-radius:var(--border-radius);inset:0.5rem;bottom:initial;padding:2rem;z-index:1}#popup.svelte-40bdid button#close.svelte-40bdid{position:absolute;right:1rem;top:1rem}.language-select.svelte-40bdid ul.svelte-40bdid{list-style-type:none}.language-select.svelte-40bdid li.svelte-40bdid{display:inline-block;margin-left:20px;font-size:0.95rem;font-weight:300;transform:translateY(-6px)}.language-select.svelte-40bdid li.active.svelte-40bdid{font-weight:600}.language-select.svelte-40bdid li.svelte-40bdid:not(:first-child)::before{content:"";position:absolute;left:-12px;top:3px;width:1px;height:15px;background:#fff}
+.hero.svelte-195jxa6.svelte-195jxa6{display:flex;justify-content:center;align-items:center;height:70vh;position:relative;overflow-x:clip}.image.svelte-195jxa6.svelte-195jxa6{width:350px;transition:all 0.6s ease;cursor:pointer;position:absolute}.image.career.svelte-195jxa6.svelte-195jxa6{padding-left:200px;padding-bottom:50px}.image.hobby.svelte-195jxa6.svelte-195jxa6{padding-right:200px}.career.svelte-195jxa6.svelte-195jxa6{position:absolute;transform:translate(-85%, -45%)}.hobby.svelte-195jxa6.svelte-195jxa6{position:absolute;transform:translate(3%, -50%)}.label.svelte-195jxa6.svelte-195jxa6{position:absolute;font-size:5em;font-weight:800;opacity:0.6;transition:all 0.6s ease;pointer-events:none;background:linear-gradient(to bottom, #FFFFFF 30%, #8A8A8A 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent}.label.career.svelte-195jxa6.svelte-195jxa6{transform:translate(-100%, 90%)}.label.hobby.svelte-195jxa6.svelte-195jxa6{transform:translate(20%, 50%)}.image.career.svelte-195jxa6.svelte-195jxa6:hover{transform:translate(-87%, -45%) scale(1.01)}.image.hobby.svelte-195jxa6.svelte-195jxa6:hover{transform:translate(5%, -50%) scale(1.02)}.career.svelte-195jxa6:hover~.label.career.svelte-195jxa6,.hobby.svelte-195jxa6:hover~.label.hobby.svelte-195jxa6{opacity:1;margin-top:-1%;-webkit-background-clip:text;-webkit-text-fill-color:transparent}.gradient-overlay.svelte-195jxa6.svelte-195jxa6{position:absolute;bottom:0;left:0;width:100%;height:80%;background:linear-gradient(to bottom, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 1) 80%);pointer-events:none}.gradient-background.svelte-195jxa6.svelte-195jxa6{z-index:-1;position:absolute;width:1500px;height:1045px;transform:translate(-50%, -64%);background-size:100% 100%;background-position:0px 0px, 0px 0px, 0px 0px;opacity:0;transition:all 0.6s ease}.gradient-background-career.svelte-195jxa6.svelte-195jxa6{background-image:radial-gradient(73% 293% at 59% 34%, #132BC40F 0%, #FF070700 36%),radial-gradient(73% 120% at 42% 66%, #30113E52 0%, #FF070700 36%),radial-gradient(75% 229% at 50% 50%, #02080CFF 1%, #000000FF 16%)}.gradient-background-hobby.svelte-195jxa6.svelte-195jxa6{background-image:radial-gradient(73% 293% at 65% 34%, #3E7C120A 0%, #FF070700 36%),radial-gradient(73% 97% at 57% 66%, #0B2A0D52 0%, #FF070700 36%),radial-gradient(169% 229% at 54% 50%, #0C0C02FF 1%, #000000FF 16%)}.career.svelte-195jxa6:hover~.gradient-background-career.svelte-195jxa6,.hobby.svelte-195jxa6:hover~.gradient-background-hobby.svelte-195jxa6{opacity:1}</style>
+    </head>
+    <body id="page">
+       
+<div class="section" id="section-78b16a60"><header class="section-container svelte-40bdid"><div class="desktop-nav svelte-40bdid"><a href="/" class="logo svelte-40bdid">Fabian Kessler</a>
+    <nav class="svelte-40bdid"><a class="link svelte-40bdid" href="/">Blog</a><a class="link svelte-40bdid" href="/">Imprint</a>
+      
+    <div class="language-select svelte-40bdid"><ul class="svelte-40bdid"><li class="svelte-40bdid active"><a href="/" id="link-en">EN
+          </a></li>
+        <li class="svelte-40bdid"><a href="/" id="link-de">DE
+          </a></li></ul></div></nav></div>
+  <div class="mobile-nav svelte-40bdid"><a href="/" class="logo svelte-40bdid">Fabian Kessler</a>
+    <button id="open" aria-label="Open mobile navigation"><svg xmlns="http://www.w3.org/2000/svg" aria-hidden role="img" width="30" height="30" viewBox="0 0 24 24" class="iconify iconify--eva"><!-- HTML_TAG_START --><g id="iconifySvelte0"><g id="iconifySvelte1"><g id="iconifySvelte2" fill="currentColor"><rect width="18" height="2" x="3" y="11" rx=".95" ry=".95"/><rect width="18" height="2" x="3" y="16" rx=".95" ry=".95"/><rect width="18" height="2" x="3" y="6" rx=".95" ry=".95"/></g></g></g><!-- HTML_TAG_END --></svg></button>
+    </div></header></div> 
+<div class="section" id="section-185cf1ad"><a id="careerLink" href="/career" style="display: none;"></a>
+<a id="hobbyLink" href="/hobby" style="display: none;"></a>
+
+<div class="hero svelte-195jxa6"><div class="zoom-container svelte-195jxa6"><img src="https://snmjgwmbisbdshitvcmi.supabase.co/storage/v1/object/public/images/c4b279d1-26c1-48a7-b42d-92748ab1745f/1690810871446hobby.png" alt="hobby" class="image hobby svelte-195jxa6" onclick="document.getElementById('hobbyLink').click();">
+            <img src="https://snmjgwmbisbdshitvcmi.supabase.co/storage/v1/object/public/images/c4b279d1-26c1-48a7-b42d-92748ab1745f/1690810878663career.png" class="image career svelte-195jxa6" onclick="document.getElementById('careerLink').click();">
+            <div class="gradient-background gradient-background-career svelte-195jxa6"></div>
+            <div class="gradient-background gradient-background-hobby svelte-195jxa6"></div>
+            <div class="gradient-overlay svelte-195jxa6"></div>
+            <div class="label career svelte-195jxa6">Career</div>
+            <div class="label hobby svelte-195jxa6">Hobby</div></div></div></div> 
+
+      <script type="module">      const path = window.location.pathname === '/' ? '' : window.location.pathname
+      const [ {default:App} ] = await Promise.all([
+        import(path + '/_module.js')
+      ]).catch(e => console.error(e))
+      new App({
+        target: document.querySelector('body'),
+        hydrate: true,
+      })</script>
+    </body>
+  </html>
+  
