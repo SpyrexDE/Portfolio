@@ -4614,7 +4614,7 @@ function create_fragment$5(ctx) {
 				site_nav: [
 					{ "link": { "url": "/", "label": "Blog" } },
 					{
-						"link": { "url": "/", "label": "Imprint" }
+						"link": { "url": "/", "label": "Impressum" }
 					}
 				]
 			}

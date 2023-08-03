@@ -3875,10 +3875,10 @@ function create_fragment$3(ctx) {
 			div2 = element("div");
 			t6 = space();
 			div3 = element("div");
-			t7 = text("Career");
+			t7 = text(/*leftlabel*/ ctx[4]);
 			t8 = space();
 			div4 = element("div");
-			t9 = text("Hobby");
+			t9 = text(/*rightlabel*/ ctx[5]);
 			this.h();
 		},
 		l(nodes) {
@@ -3923,12 +3923,12 @@ function create_fragment$3(ctx) {
 			t6 = claim_space(div5_nodes);
 			div3 = claim_element(div5_nodes, "DIV", { class: true });
 			var div3_nodes = children(div3);
-			t7 = claim_text(div3_nodes, "Career");
+			t7 = claim_text(div3_nodes, /*leftlabel*/ ctx[4]);
 			div3_nodes.forEach(detach);
 			t8 = claim_space(div5_nodes);
 			div4 = claim_element(div5_nodes, "DIV", { class: true });
 			var div4_nodes = children(div4);
-			t9 = claim_text(div4_nodes, "Hobby");
+			t9 = claim_text(div4_nodes, /*rightlabel*/ ctx[5]);
 			div4_nodes.forEach(detach);
 			div5_nodes.forEach(detach);
 			div6_nodes.forEach(detach);
@@ -4008,6 +4008,9 @@ function create_fragment$3(ctx) {
 			if (dirty & /*career*/ 1 && img1_alt_value !== (img1_alt_value = /*career*/ ctx[0].alt)) {
 				attr(img1, "alt", img1_alt_value);
 			}
+
+			if (dirty & /*leftlabel*/ 16) set_data(t7, /*leftlabel*/ ctx[4]);
+			if (dirty & /*rightlabel*/ 32) set_data(t9, /*rightlabel*/ ctx[5]);
 		},
 		i: noop,
 		o: noop,
@@ -4026,19 +4029,34 @@ function instance$3($$self, $$props, $$invalidate) {
 	let { hobby } = $$props;
 	let { career_link } = $$props;
 	let { hobby_link } = $$props;
+	let { leftlabel } = $$props;
+	let { rightlabel } = $$props;
 
 	$$self.$$set = $$props => {
-		if ('favicon' in $$props) $$invalidate(4, favicon = $$props.favicon);
-		if ('image' in $$props) $$invalidate(5, image = $$props.image);
-		if ('title' in $$props) $$invalidate(6, title = $$props.title);
-		if ('description' in $$props) $$invalidate(7, description = $$props.description);
+		if ('favicon' in $$props) $$invalidate(6, favicon = $$props.favicon);
+		if ('image' in $$props) $$invalidate(7, image = $$props.image);
+		if ('title' in $$props) $$invalidate(8, title = $$props.title);
+		if ('description' in $$props) $$invalidate(9, description = $$props.description);
 		if ('career' in $$props) $$invalidate(0, career = $$props.career);
 		if ('hobby' in $$props) $$invalidate(1, hobby = $$props.hobby);
 		if ('career_link' in $$props) $$invalidate(2, career_link = $$props.career_link);
 		if ('hobby_link' in $$props) $$invalidate(3, hobby_link = $$props.hobby_link);
+		if ('leftlabel' in $$props) $$invalidate(4, leftlabel = $$props.leftlabel);
+		if ('rightlabel' in $$props) $$invalidate(5, rightlabel = $$props.rightlabel);
 	};
 
-	return [career, hobby, career_link, hobby_link, favicon, image, title, description];
+	return [
+		career,
+		hobby,
+		career_link,
+		hobby_link,
+		leftlabel,
+		rightlabel,
+		favicon,
+		image,
+		title,
+		description
+	];
 }
 
 class Component$3 extends SvelteComponent {
@@ -4046,14 +4064,16 @@ class Component$3 extends SvelteComponent {
 		super();
 
 		init(this, options, instance$3, create_fragment$3, safe_not_equal, {
-			favicon: 4,
-			image: 5,
-			title: 6,
-			description: 7,
+			favicon: 6,
+			image: 7,
+			title: 8,
+			description: 9,
 			career: 0,
 			hobby: 1,
 			career_link: 2,
-			hobby_link: 3
+			hobby_link: 3,
+			leftlabel: 4,
+			rightlabel: 5
 		});
 	}
 }
@@ -4148,7 +4168,7 @@ function create_fragment$4(ctx) {
 				site_nav: [
 					{ "link": { "url": "/", "label": "Blog" } },
 					{
-						"link": { "url": "/", "label": "Imprint" }
+						"link": { "url": "/", "label": "Impressum" }
 					}
 				]
 			}
@@ -4182,8 +4202,10 @@ function create_fragment$4(ctx) {
 					"url": "https://snmjgwmbisbdshitvcmi.supabase.co/storage/v1/object/public/images/c4b279d1-26c1-48a7-b42d-92748ab1745f/1690810871446hobby.png",
 					"size": 422
 				},
-				career_link: { "url": "/career", "label": "" },
-				hobby_link: { "url": "/hobby", "label": "" }
+				career_link: { "label": "", "url": "", "active": false },
+				hobby_link: { "url": "/hobby", "label": "" },
+				leftlabel: "",
+				rightlabel: ""
 			}
 		});
 
