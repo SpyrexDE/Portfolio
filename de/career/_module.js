@@ -3823,7 +3823,7 @@ function get_each_context$1(ctx, list, i) {
 	return child_ctx;
 }
 
-// (81:4) {#each entries as entry}
+// (220:4) {#each entries as entry}
 function create_each_block$1(ctx) {
 	let div3;
 	let div0;
@@ -3878,10 +3878,10 @@ function create_each_block$1(ctx) {
 		},
 		h() {
 			attr(div0, "class", "year");
-			attr(div1, "class", "title svelte-crhpx2");
-			attr(p, "class", "svelte-crhpx2");
+			attr(div1, "class", "title svelte-tybwza");
+			attr(p, "class", "svelte-tybwza");
 			attr(div2, "class", "body");
-			attr(div3, "class", "entry svelte-crhpx2");
+			attr(div3, "class", "entry svelte-tybwza");
 		},
 		m(target, anchor) {
 			insert_hydration(target, div3, anchor);
@@ -3907,9 +3907,22 @@ function create_each_block$1(ctx) {
 }
 
 function create_fragment$3(ctx) {
+	let div3;
 	let div2;
-	let div1;
 	let div0;
+	let aside0;
+	let aside0_src_value;
+	let t0;
+	let aside1;
+	let aside1_src_value;
+	let t1;
+	let aside2;
+	let aside2_src_value;
+	let t2;
+	let aside3;
+	let aside3_src_value;
+	let t3;
+	let div1;
 	let each_value = /*entries*/ ctx[0];
 	let each_blocks = [];
 
@@ -3919,9 +3932,18 @@ function create_fragment$3(ctx) {
 
 	return {
 		c() {
+			div3 = element("div");
 			div2 = element("div");
-			div1 = element("div");
 			div0 = element("div");
+			aside0 = element("aside");
+			t0 = space();
+			aside1 = element("aside");
+			t1 = space();
+			aside2 = element("aside");
+			t2 = space();
+			aside3 = element("aside");
+			t3 = space();
+			div1 = element("div");
 
 			for (let i = 0; i < each_blocks.length; i += 1) {
 				each_blocks[i].c();
@@ -3930,36 +3952,113 @@ function create_fragment$3(ctx) {
 			this.h();
 		},
 		l(nodes) {
-			div2 = claim_element(nodes, "DIV", { class: true, id: true });
+			div3 = claim_element(nodes, "DIV", { class: true, id: true });
+			var div3_nodes = children(div3);
+			div2 = claim_element(div3_nodes, "DIV", { class: true });
 			var div2_nodes = children(div2);
-			div1 = claim_element(div2_nodes, "DIV", { class: true });
-			var div1_nodes = children(div1);
-			div0 = claim_element(div1_nodes, "DIV", { class: true });
+			div0 = claim_element(div2_nodes, "DIV", { class: true });
 			var div0_nodes = children(div0);
 
+			aside0 = claim_element(div0_nodes, "ASIDE", {
+				class: true,
+				x: true,
+				y: true,
+				height: true,
+				src: true
+			});
+
+			children(aside0).forEach(detach);
+			t0 = claim_space(div0_nodes);
+
+			aside1 = claim_element(div0_nodes, "ASIDE", {
+				class: true,
+				x: true,
+				y: true,
+				height: true,
+				src: true
+			});
+
+			children(aside1).forEach(detach);
+			t1 = claim_space(div0_nodes);
+
+			aside2 = claim_element(div0_nodes, "ASIDE", {
+				class: true,
+				x: true,
+				y: true,
+				height: true,
+				src: true
+			});
+
+			children(aside2).forEach(detach);
+			t2 = claim_space(div0_nodes);
+
+			aside3 = claim_element(div0_nodes, "ASIDE", {
+				class: true,
+				x: true,
+				y: true,
+				height: true,
+				src: true
+			});
+
+			children(aside3).forEach(detach);
+			div0_nodes.forEach(detach);
+			t3 = claim_space(div2_nodes);
+			div1 = claim_element(div2_nodes, "DIV", { class: true });
+			var div1_nodes = children(div1);
+
 			for (let i = 0; i < each_blocks.length; i += 1) {
-				each_blocks[i].l(div0_nodes);
+				each_blocks[i].l(div1_nodes);
 			}
 
-			div0_nodes.forEach(detach);
 			div1_nodes.forEach(detach);
 			div2_nodes.forEach(detach);
+			div3_nodes.forEach(detach);
 			this.h();
 		},
 		h() {
-			attr(div0, "class", "entries svelte-crhpx2");
-			attr(div1, "class", "timeline svelte-crhpx2");
-			attr(div2, "class", "section");
-			attr(div2, "id", "section-229f8d81");
+			attr(aside0, "class", "image svelte-tybwza");
+			attr(aside0, "x", "100");
+			attr(aside0, "y", "100");
+			attr(aside0, "height", "100");
+			if (!src_url_equal(aside0.src, aside0_src_value = "https://preview.redd.it/y83ppc5i6r4b1.png?width=1024&format=png&auto=webp&s=22dc6ab97b31685dc706408c676df588b9c31712")) attr(aside0, "src", aside0_src_value);
+			attr(aside1, "class", "image svelte-tybwza");
+			attr(aside1, "x", "-300");
+			attr(aside1, "y", "350");
+			attr(aside1, "height", "200");
+			if (!src_url_equal(aside1.src, aside1_src_value = "https://secure.gravatar.com/avatar/8081b26e05bb4354f7d65ffc34cbbd67?s=600&d=retro&r=pg")) attr(aside1, "src", aside1_src_value);
+			attr(aside2, "class", "image svelte-tybwza");
+			attr(aside2, "x", "300");
+			attr(aside2, "y", "650");
+			attr(aside2, "height", "200");
+			if (!src_url_equal(aside2.src, aside2_src_value = "https://secure.gravatar.com/avatar/8081b26e05bb4354f7d65ffc34cbbd67?s=600&d=retro&r=pg")) attr(aside2, "src", aside2_src_value);
+			attr(aside3, "class", "image svelte-tybwza");
+			attr(aside3, "x", "-300");
+			attr(aside3, "y", "900");
+			attr(aside3, "height", "200");
+			if (!src_url_equal(aside3.src, aside3_src_value = "https://secure.gravatar.com/avatar/8081b26e05bb4354f7d65ffc34cbbd67?s=600&d=retro&r=pg")) attr(aside3, "src", aside3_src_value);
+			attr(div0, "class", "background svelte-tybwza");
+			attr(div1, "class", "entries svelte-tybwza");
+			attr(div2, "class", "timeline svelte-tybwza");
+			attr(div3, "class", "section");
+			attr(div3, "id", "section-229f8d81");
 		},
 		m(target, anchor) {
-			insert_hydration(target, div2, anchor);
+			insert_hydration(target, div3, anchor);
+			append_hydration(div3, div2);
+			append_hydration(div2, div0);
+			append_hydration(div0, aside0);
+			append_hydration(div0, t0);
+			append_hydration(div0, aside1);
+			append_hydration(div0, t1);
+			append_hydration(div0, aside2);
+			append_hydration(div0, t2);
+			append_hydration(div0, aside3);
+			append_hydration(div2, t3);
 			append_hydration(div2, div1);
-			append_hydration(div1, div0);
 
 			for (let i = 0; i < each_blocks.length; i += 1) {
 				if (each_blocks[i]) {
-					each_blocks[i].m(div0, null);
+					each_blocks[i].m(div1, null);
 				}
 			}
 		},
@@ -3976,7 +4075,7 @@ function create_fragment$3(ctx) {
 					} else {
 						each_blocks[i] = create_each_block$1(child_ctx);
 						each_blocks[i].c();
-						each_blocks[i].m(div0, null);
+						each_blocks[i].m(div1, null);
 					}
 				}
 
@@ -3990,10 +4089,102 @@ function create_fragment$3(ctx) {
 		i: noop,
 		o: noop,
 		d(detaching) {
-			if (detaching) detach(div2);
+			if (detaching) detach(div3);
 			destroy_each(each_blocks, detaching);
 		}
 	};
+}
+
+function updateImageBackgrounds() {
+	const images = document.querySelectorAll(".image");
+
+	images.forEach((image, index) => {
+		const imageUrl = image.getAttribute("src");
+		const height = image.getAttribute("height");
+		const x = image.getAttribute("x");
+		const y = image.getAttribute("y");
+		const className = `image-${index + 1}`;
+		const img = new Image();
+		img.src = imageUrl;
+
+		// Use the onload event to get the image width and calculate appropriate width
+		img.onload = function () {
+			const aspectRatio = img.width / img.height;
+			const widthInPixels = aspectRatio * parseInt(height, 10);
+			const turnSpeed = Math.floor(Math.random() * (370 - 360 + 1)) + 360;
+
+			// Add background image styles to the image element
+			const style = `
+        height: ${height}px;
+        width: ${widthInPixels}px;
+        background-image: url(${imageUrl});
+        left: ${x}px;
+        top: ${y}px;
+        
+        animation: tilt ${turnSpeed}s ease infinite;
+        animation-play-state: paused;
+        animation-delay: calc(-1 * var(--scroll-percentage) - ${y}s);
+      `;
+
+			image.setAttribute("style", style);
+
+			// Add :after styles dynamically using a unique class name
+			const afterStyles = `
+        .${className}:after {
+          -webkit-mask-image: url(${imageUrl});
+          mask-image: url(${imageUrl});
+
+          animation: bg ${turnSpeed}s ease infinite;
+          animation-play-state: paused;
+          animation-delay: calc(-1 * var(--scroll-percentage) - ${y}s);
+          
+        }
+      `;
+
+			// Create a style element and append it to the document head
+			const styleElement = document.createElement("style");
+
+			styleElement.textContent = afterStyles;
+			document.head.appendChild(styleElement);
+
+			const animationStyles = `
+      @keyframes tilt {
+        0%, 100% {
+          transform: translate3d(0, 0, 0.01px) rotateY(-20deg) rotateX(5deg);
+        }
+        50% {
+          transform: translate3d(0, 0, 0.01px) rotateY(20deg) rotateX(5deg);
+        }
+      }
+      @keyframes bg {
+        0%, 100% {
+          background-position: 50% 50%, calc(50% + 1px) calc(50% + 1px), 0% 50%;
+        }
+        50% {
+          background-position: 50% 50%, calc(50% - 1px) calc(50% - 1px), 100% 50%;
+        }
+      }
+      `;
+
+			// Create a style element and append it to the document head
+			const styleElement3 = document.createElement("style");
+
+			styleElement3.textContent = animationStyles;
+			document.head.appendChild(styleElement3);
+
+			// Add the unique class name to the image element
+			image.classList.add(className);
+		};
+	});
+}
+
+function updateScroll() {
+	const scrollY = window.scrollY;
+	const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
+	const percentage = scrollY / maxScroll * 100;
+
+	// Update the CSS custom property
+	document.documentElement.style.setProperty('--scroll-percentage', `${percentage}s`);
 }
 
 function instance$3($$self, $$props, $$invalidate) {
@@ -4002,6 +4193,11 @@ function instance$3($$self, $$props, $$invalidate) {
 	let { title } = $$props;
 	let { description } = $$props;
 	let { entries } = $$props;
+
+	onMount(() => {
+		updateImageBackgrounds();
+		window.addEventListener('scroll', updateScroll);
+	});
 
 	$$self.$$set = $$props => {
 		if ('favicon' in $$props) $$invalidate(1, favicon = $$props.favicon);
