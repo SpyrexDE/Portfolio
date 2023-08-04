@@ -4203,13 +4203,13 @@ function create_fragment$4(ctx) {
 					"size": 422
 				},
 				career_link: {
-					"label": "",
 					"url": "/career",
+					"label": "",
 					"active": false
 				},
 				hobby_link: {
-					"label": "",
 					"url": "/hobby",
+					"label": "",
 					"active": false
 				},
 				leftlabel: "Career",
