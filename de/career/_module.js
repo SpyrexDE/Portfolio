@@ -3823,7 +3823,7 @@ function get_each_context$1(ctx, list, i) {
 	return child_ctx;
 }
 
-// (218:4) {#each entries as entry}
+// (219:4) {#each entries as entry}
 function create_each_block$1(ctx) {
 	let div3;
 	let div0;
@@ -4112,6 +4112,7 @@ function updateImageBackgrounds() {
 			const aspectRatio = img.width / img.height;
 			const widthInPixels = aspectRatio * parseInt(height, 10);
 			const turnSpeed = Math.floor(Math.random() * (3000 - 2000 + 1)) + 3000;
+			const turnOffset = Math.floor(Math.random() * (turnSpeed - 1)) + turnSpeed;
 
 			// Add background image styles to the image element
 			const style = `
@@ -4121,9 +4122,9 @@ function updateImageBackgrounds() {
         left: ${x}px;
         top: ${y}px;
         
-        animation: tilt ${turnSpeed}s ease infinite;
+        animation: tilt ${turnSpeed}s linear infinite;
         animation-play-state: paused;
-        animation-delay: calc(-1 * var(--scroll-distance) - ${y}s);
+        animation-delay: calc(-1 * var(--scroll-distance) - ${turnOffset}s);
       `;
 
 			image.setAttribute("style", style);
@@ -4134,9 +4135,9 @@ function updateImageBackgrounds() {
           -webkit-mask-image: url(${imageUrl});
           mask-image: url(${imageUrl});
 
-          animation: bg ${turnSpeed}s ease infinite;
+          animation: bg ${turnSpeed}s linear infinite;
           animation-play-state: paused;
-          animation-delay: calc(-1 * var(--scroll-distance) - ${y}s);
+          animation-delay: calc(-1 * var(--scroll-distance) - ${turnOffset}s);
           
         }
       `;
