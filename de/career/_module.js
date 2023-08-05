@@ -3823,7 +3823,7 @@ function get_each_context$1(ctx, list, i) {
 	return child_ctx;
 }
 
-// (219:4) {#each entries as entry}
+// (218:4) {#each entries as entry}
 function create_each_block$1(ctx) {
 	let div3;
 	let div0;
@@ -3878,10 +3878,10 @@ function create_each_block$1(ctx) {
 		},
 		h() {
 			attr(div0, "class", "year");
-			attr(div1, "class", "title svelte-1xbgmej");
-			attr(p, "class", "svelte-1xbgmej");
+			attr(div1, "class", "title svelte-bxlbe2");
+			attr(p, "class", "svelte-bxlbe2");
 			attr(div2, "class", "body");
-			attr(div3, "class", "entry svelte-1xbgmej");
+			attr(div3, "class", "entry svelte-bxlbe2");
 		},
 		m(target, anchor) {
 			insert_hydration(target, div3, anchor);
@@ -4016,29 +4016,29 @@ function create_fragment$3(ctx) {
 			this.h();
 		},
 		h() {
-			attr(aside0, "class", "image svelte-1xbgmej");
+			attr(aside0, "class", "image svelte-bxlbe2");
 			attr(aside0, "x", "100");
 			attr(aside0, "y", "100");
 			attr(aside0, "height", "100");
 			if (!src_url_equal(aside0.src, aside0_src_value = "https://preview.redd.it/y83ppc5i6r4b1.png?width=1024&format=png&auto=webp&s=22dc6ab97b31685dc706408c676df588b9c31712")) attr(aside0, "src", aside0_src_value);
-			attr(aside1, "class", "image svelte-1xbgmej");
+			attr(aside1, "class", "image svelte-bxlbe2");
 			attr(aside1, "x", "-300");
 			attr(aside1, "y", "350");
 			attr(aside1, "height", "200");
 			if (!src_url_equal(aside1.src, aside1_src_value = "https://secure.gravatar.com/avatar/8081b26e05bb4354f7d65ffc34cbbd67?s=600&d=retro&r=pg")) attr(aside1, "src", aside1_src_value);
-			attr(aside2, "class", "image svelte-1xbgmej");
+			attr(aside2, "class", "image svelte-bxlbe2");
 			attr(aside2, "x", "300");
 			attr(aside2, "y", "650");
 			attr(aside2, "height", "200");
 			if (!src_url_equal(aside2.src, aside2_src_value = "https://secure.gravatar.com/avatar/8081b26e05bb4354f7d65ffc34cbbd67?s=600&d=retro&r=pg")) attr(aside2, "src", aside2_src_value);
-			attr(aside3, "class", "image svelte-1xbgmej");
+			attr(aside3, "class", "image svelte-bxlbe2");
 			attr(aside3, "x", "-300");
 			attr(aside3, "y", "900");
 			attr(aside3, "height", "200");
 			if (!src_url_equal(aside3.src, aside3_src_value = "https://secure.gravatar.com/avatar/8081b26e05bb4354f7d65ffc34cbbd67?s=600&d=retro&r=pg")) attr(aside3, "src", aside3_src_value);
-			attr(div0, "class", "background svelte-1xbgmej");
-			attr(div1, "class", "entries svelte-1xbgmej");
-			attr(div2, "class", "timeline svelte-1xbgmej");
+			attr(div0, "class", "background svelte-bxlbe2");
+			attr(div1, "class", "entries svelte-bxlbe2");
+			attr(div2, "class", "timeline svelte-bxlbe2");
 			attr(div3, "class", "section");
 			attr(div3, "id", "section-229f8d81");
 		},
