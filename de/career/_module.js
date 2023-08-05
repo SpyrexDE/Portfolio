@@ -4174,7 +4174,7 @@ function updateImageBackgrounds() {
 		img.onload = function () {
 			const aspectRatio = img.width / img.height;
 			const widthInPixels = aspectRatio * parseInt(height, 10);
-			const turnSpeed = Math.floor(Math.random() * (3000 - 2000 + 1)) + 3000;
+			const turnSpeed = Math.floor(Math.random() * (3000 - 2000 + 1)) + 2000;
 			const turnOffset = Math.floor(Math.random() * (turnSpeed - 1)) + turnSpeed;
 
 			// Add background image styles to the image element
