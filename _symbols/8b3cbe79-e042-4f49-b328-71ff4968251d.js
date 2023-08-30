@@ -1,3 +1,4 @@
+// Hero with form - Updated August 30, 2023
 function noop() { }
 const identity = x => x;
 function assign(tar, src) {
@@ -234,12 +235,6 @@ function detach(node) {
         node.parentNode.removeChild(node);
     }
 }
-function destroy_each(iterations, detaching) {
-    for (let i = 0; i < iterations.length; i += 1) {
-        if (iterations[i])
-            iterations[i].d(detaching);
-    }
-}
 function element(name) {
     return document.createElement(name);
 }
@@ -258,6 +253,13 @@ function empty() {
 function listen(node, event, handler, options) {
     node.addEventListener(event, handler, options);
     return () => node.removeEventListener(event, handler, options);
+}
+function prevent_default(fn) {
+    return function (event) {
+        event.preventDefault();
+        // @ts-ignore
+        return fn.call(this, event);
+    };
 }
 function attr(node, attribute, value) {
     if (value == null)
@@ -399,42 +401,10 @@ function set_data(text, data) {
         return;
     text.data = data;
 }
-function set_style(node, key, value, important) {
-    if (value == null) {
-        node.style.removeProperty(key);
-    }
-    else {
-        node.style.setProperty(key, value, important ? 'important' : '');
-    }
-}
-function toggle_class(element, name, toggle) {
-    element.classList[toggle ? 'add' : 'remove'](name);
-}
 function custom_event(type, detail, { bubbles = false, cancelable = false } = {}) {
     const e = document.createEvent('CustomEvent');
     e.initCustomEvent(type, bubbles, cancelable, detail);
     return e;
-}
-function head_selector(nodeId, head) {
-    const result = [];
-    let started = 0;
-    for (const node of head.childNodes) {
-        if (node.nodeType === 8 /* comment node */) {
-            const comment = node.textContent.trim();
-            if (comment === `HEAD_${nodeId}_END`) {
-                started -= 1;
-                result.push(node);
-            }
-            else if (comment === `HEAD_${nodeId}_START`) {
-                started += 1;
-                result.push(node);
-            }
-        }
-        else if (started > 0) {
-            result.push(node);
-        }
-    }
-    return result;
 }
 
 // we need to store the information for multiple documents because a Svelte application could also contain iframes
@@ -723,109 +693,67 @@ function transition_out(block, local, detach, callback) {
     }
 }
 const null_transition = { duration: 0 };
-function create_bidirectional_transition(node, fn, params, intro) {
-    const options = { direction: 'both' };
+function create_in_transition(node, fn, params) {
+    const options = { direction: 'in' };
     let config = fn(node, params, options);
-    let t = intro ? 0 : 1;
-    let running_program = null;
-    let pending_program = null;
-    let animation_name = null;
-    function clear_animation() {
+    let running = false;
+    let animation_name;
+    let task;
+    let uid = 0;
+    function cleanup() {
         if (animation_name)
             delete_rule(node, animation_name);
     }
-    function init(program, duration) {
-        const d = (program.b - t);
-        duration *= Math.abs(d);
-        return {
-            a: t,
-            b: program.b,
-            d,
-            duration,
-            start: program.start,
-            end: program.start + duration,
-            group: program.group
-        };
-    }
-    function go(b) {
+    function go() {
         const { delay = 0, duration = 300, easing = identity, tick = noop, css } = config || null_transition;
-        const program = {
-            start: now() + delay,
-            b
-        };
-        if (!b) {
-            // @ts-ignore todo: improve typings
-            program.group = outros;
-            outros.r += 1;
-        }
-        if (running_program || pending_program) {
-            pending_program = program;
-        }
-        else {
-            // if this is an intro, and there's a delay, we need to do
-            // an initial tick and/or apply CSS animation immediately
-            if (css) {
-                clear_animation();
-                animation_name = create_rule(node, t, b, duration, delay, easing, css);
+        if (css)
+            animation_name = create_rule(node, 0, 1, duration, delay, easing, css, uid++);
+        tick(0, 1);
+        const start_time = now() + delay;
+        const end_time = start_time + duration;
+        if (task)
+            task.abort();
+        running = true;
+        add_render_callback(() => dispatch(node, true, 'start'));
+        task = loop(now => {
+            if (running) {
+                if (now >= end_time) {
+                    tick(1, 0);
+                    dispatch(node, true, 'end');
+                    cleanup();
+                    return running = false;
+                }
+                if (now >= start_time) {
+                    const t = easing((now - start_time) / duration);
+                    tick(t, 1 - t);
+                }
             }
-            if (b)
-                tick(0, 1);
-            running_program = init(program, duration);
-            add_render_callback(() => dispatch(node, b, 'start'));
-            loop(now => {
-                if (pending_program && now > pending_program.start) {
-                    running_program = init(pending_program, duration);
-                    pending_program = null;
-                    dispatch(node, running_program.b, 'start');
-                    if (css) {
-                        clear_animation();
-                        animation_name = create_rule(node, t, running_program.b, running_program.duration, 0, easing, config.css);
-                    }
-                }
-                if (running_program) {
-                    if (now >= running_program.end) {
-                        tick(t = running_program.b, 1 - t);
-                        dispatch(node, running_program.b, 'end');
-                        if (!pending_program) {
-                            // we're done
-                            if (running_program.b) {
-                                // intro — we can tidy up immediately
-                                clear_animation();
-                            }
-                            else {
-                                // outro — needs to be coordinated
-                                if (!--running_program.group.r)
-                                    run_all(running_program.group.c);
-                            }
-                        }
-                        running_program = null;
-                    }
-                    else if (now >= running_program.start) {
-                        const p = now - running_program.start;
-                        t = running_program.a + running_program.d * easing(p / running_program.duration);
-                        tick(t, 1 - t);
-                    }
-                }
-                return !!(running_program || pending_program);
-            });
-        }
+            return running;
+        });
     }
+    let started = false;
     return {
-        run(b) {
+        start() {
+            if (started)
+                return;
+            started = true;
+            delete_rule(node);
             if (is_function(config)) {
-                wait().then(() => {
-                    // @ts-ignore
-                    config = config(options);
-                    go(b);
-                });
+                config = config(options);
+                wait().then(go);
             }
             else {
-                go(b);
+                go();
             }
         },
+        invalidate() {
+            started = false;
+        },
         end() {
-            clear_animation();
-            running_program = pending_program = null;
+            if (running) {
+                cleanup();
+                running = false;
+            }
         }
     };
 }
@@ -1004,233 +932,15 @@ class SvelteComponent {
     }
 }
 
-/* generated by Svelte v3.59.1 */
+const exports = {}; const module = { exports };
 
-function create_if_block(ctx) {
-	let meta0;
-	let meta0_content_value;
-	let t;
-	let meta1;
-	let meta1_content_value;
+!function(e,t){"object"==typeof exports&&"undefined"!=typeof module?module.exports=t():"function"==typeof define&&define.amd?define(t):(e="undefined"!=typeof globalThis?globalThis:e||self).axios=t();}(undefined,(function(){function e(t){return e="function"==typeof Symbol&&"symbol"==typeof Symbol.iterator?function(e){return typeof e}:function(e){return e&&"function"==typeof Symbol&&e.constructor===Symbol&&e!==Symbol.prototype?"symbol":typeof e},e(t)}function t(e,t){if(!(e instanceof t))throw new TypeError("Cannot call a class as a function")}function n(e,t){for(var n=0;n<t.length;n++){var r=t[n];r.enumerable=r.enumerable||!1,r.configurable=!0,"value"in r&&(r.writable=!0),Object.defineProperty(e,r.key,r);}}function r(e,t,r){return t&&n(e.prototype,t),r&&n(e,r),Object.defineProperty(e,"prototype",{writable:!1}),e}function o(e,t){return function(e){if(Array.isArray(e))return e}(e)||function(e,t){var n=null==e?null:"undefined"!=typeof Symbol&&e[Symbol.iterator]||e["@@iterator"];if(null==n)return;var r,o,i=[],a=!0,s=!1;try{for(n=n.call(e);!(a=(r=n.next()).done)&&(i.push(r.value),!t||i.length!==t);a=!0);}catch(e){s=!0,o=e;}finally{try{a||null==n.return||n.return();}finally{if(s)throw o}}return i}(e,t)||function(e,t){if(!e)return;if("string"==typeof e)return i(e,t);var n=Object.prototype.toString.call(e).slice(8,-1);"Object"===n&&e.constructor&&(n=e.constructor.name);if("Map"===n||"Set"===n)return Array.from(e);if("Arguments"===n||/^(?:Ui|I)nt(?:8|16|32)(?:Clamped)?Array$/.test(n))return i(e,t)}(e,t)||function(){throw new TypeError("Invalid attempt to destructure non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method.")}()}function i(e,t){(null==t||t>e.length)&&(t=e.length);for(var n=0,r=new Array(t);n<t;n++)r[n]=e[n];return r}function a(e,t){return function(){return e.apply(t,arguments)}}var s,u=Object.prototype.toString,c=Object.getPrototypeOf,f=(s=Object.create(null),function(e){var t=u.call(e);return s[t]||(s[t]=t.slice(8,-1).toLowerCase())}),l=function(e){return e=e.toLowerCase(),function(t){return f(t)===e}},d=function(t){return function(n){return e(n)===t}},p=Array.isArray,h=d("undefined");var m=l("ArrayBuffer");var y=d("string"),v=d("function"),b=d("number"),g=function(t){return null!==t&&"object"===e(t)},w=function(e){if("object"!==f(e))return !1;var t=c(e);return !(null!==t&&t!==Object.prototype&&null!==Object.getPrototypeOf(t)||Symbol.toStringTag in e||Symbol.iterator in e)},E=l("Date"),O=l("File"),S=l("Blob"),R=l("FileList"),A=l("URLSearchParams");function T(t,n){var r,o,i=arguments.length>2&&void 0!==arguments[2]?arguments[2]:{},a=i.allOwnKeys,s=void 0!==a&&a;if(null!=t)if("object"!==e(t)&&(t=[t]),p(t))for(r=0,o=t.length;r<o;r++)n.call(null,t[r],r,t);else {var u,c=s?Object.getOwnPropertyNames(t):Object.keys(t),f=c.length;for(r=0;r<f;r++)u=c[r],n.call(null,t[u],u,t);}}function j(e,t){t=t.toLowerCase();for(var n,r=Object.keys(e),o=r.length;o-- >0;)if(t===(n=r[o]).toLowerCase())return n;return null}var N="undefined"!=typeof globalThis?globalThis:"undefined"!=typeof self?self:"undefined"!=typeof window?window:global,C=function(e){return !h(e)&&e!==N};var x,P=(x="undefined"!=typeof Uint8Array&&c(Uint8Array),function(e){return x&&e instanceof x}),k=l("HTMLFormElement"),U=function(e){var t=Object.prototype.hasOwnProperty;return function(e,n){return t.call(e,n)}}(),_=l("RegExp"),F=function(e,t){var n=Object.getOwnPropertyDescriptors(e),r={};T(n,(function(n,o){var i;!1!==(i=t(n,o,e))&&(r[o]=i||n);})),Object.defineProperties(e,r);},B="abcdefghijklmnopqrstuvwxyz",L="0123456789",D={DIGIT:L,ALPHA:B,ALPHA_DIGIT:B+B.toUpperCase()+L};var I=l("AsyncFunction"),q={isArray:p,isArrayBuffer:m,isBuffer:function(e){return null!==e&&!h(e)&&null!==e.constructor&&!h(e.constructor)&&v(e.constructor.isBuffer)&&e.constructor.isBuffer(e)},isFormData:function(e){var t;return e&&("function"==typeof FormData&&e instanceof FormData||v(e.append)&&("formdata"===(t=f(e))||"object"===t&&v(e.toString)&&"[object FormData]"===e.toString()))},isArrayBufferView:function(e){return "undefined"!=typeof ArrayBuffer&&ArrayBuffer.isView?ArrayBuffer.isView(e):e&&e.buffer&&m(e.buffer)},isString:y,isNumber:b,isBoolean:function(e){return !0===e||!1===e},isObject:g,isPlainObject:w,isUndefined:h,isDate:E,isFile:O,isBlob:S,isRegExp:_,isFunction:v,isStream:function(e){return g(e)&&v(e.pipe)},isURLSearchParams:A,isTypedArray:P,isFileList:R,forEach:T,merge:function e(){for(var t=C(this)&&this||{},n=t.caseless,r={},o=function(t,o){var i=n&&j(r,o)||o;w(r[i])&&w(t)?r[i]=e(r[i],t):w(t)?r[i]=e({},t):p(t)?r[i]=t.slice():r[i]=t;},i=0,a=arguments.length;i<a;i++)arguments[i]&&T(arguments[i],o);return r},extend:function(e,t,n){var r=arguments.length>3&&void 0!==arguments[3]?arguments[3]:{},o=r.allOwnKeys;return T(t,(function(t,r){n&&v(t)?e[r]=a(t,n):e[r]=t;}),{allOwnKeys:o}),e},trim:function(e){return e.trim?e.trim():e.replace(/^[\s\uFEFF\xA0]+|[\s\uFEFF\xA0]+$/g,"")},stripBOM:function(e){return 65279===e.charCodeAt(0)&&(e=e.slice(1)),e},inherits:function(e,t,n,r){e.prototype=Object.create(t.prototype,r),e.prototype.constructor=e,Object.defineProperty(e,"super",{value:t.prototype}),n&&Object.assign(e.prototype,n);},toFlatObject:function(e,t,n,r){var o,i,a,s={};if(t=t||{},null==e)return t;do{for(i=(o=Object.getOwnPropertyNames(e)).length;i-- >0;)a=o[i],r&&!r(a,e,t)||s[a]||(t[a]=e[a],s[a]=!0);e=!1!==n&&c(e);}while(e&&(!n||n(e,t))&&e!==Object.prototype);return t},kindOf:f,kindOfTest:l,endsWith:function(e,t,n){e=String(e),(void 0===n||n>e.length)&&(n=e.length),n-=t.length;var r=e.indexOf(t,n);return -1!==r&&r===n},toArray:function(e){if(!e)return null;if(p(e))return e;var t=e.length;if(!b(t))return null;for(var n=new Array(t);t-- >0;)n[t]=e[t];return n},forEachEntry:function(e,t){for(var n,r=(e&&e[Symbol.iterator]).call(e);(n=r.next())&&!n.done;){var o=n.value;t.call(e,o[0],o[1]);}},matchAll:function(e,t){for(var n,r=[];null!==(n=e.exec(t));)r.push(n);return r},isHTMLForm:k,hasOwnProperty:U,hasOwnProp:U,reduceDescriptors:F,freezeMethods:function(e){F(e,(function(t,n){if(v(e)&&-1!==["arguments","caller","callee"].indexOf(n))return !1;var r=e[n];v(r)&&(t.enumerable=!1,"writable"in t?t.writable=!1:t.set||(t.set=function(){throw Error("Can not rewrite read-only method '"+n+"'")}));}));},toObjectSet:function(e,t){var n={},r=function(e){e.forEach((function(e){n[e]=!0;}));};return p(e)?r(e):r(String(e).split(t)),n},toCamelCase:function(e){return e.toLowerCase().replace(/[-_\s]([a-z\d])(\w*)/g,(function(e,t,n){return t.toUpperCase()+n}))},noop:function(){},toFiniteNumber:function(e,t){return e=+e,Number.isFinite(e)?e:t},findKey:j,global:N,isContextDefined:C,ALPHABET:D,generateString:function(){for(var e=arguments.length>0&&void 0!==arguments[0]?arguments[0]:16,t=arguments.length>1&&void 0!==arguments[1]?arguments[1]:D.ALPHA_DIGIT,n="",r=t.length;e--;)n+=t[Math.random()*r|0];return n},isSpecCompliantForm:function(e){return !!(e&&v(e.append)&&"FormData"===e[Symbol.toStringTag]&&e[Symbol.iterator])},toJSONObject:function(e){var t=new Array(10);return function e(n,r){if(g(n)){if(t.indexOf(n)>=0)return;if(!("toJSON"in n)){t[r]=n;var o=p(n)?[]:{};return T(n,(function(t,n){var i=e(t,r+1);!h(i)&&(o[n]=i);})),t[r]=void 0,o}}return n}(e,0)},isAsyncFn:I,isThenable:function(e){return e&&(g(e)||v(e))&&v(e.then)&&v(e.catch)}};function M(e,t,n,r,o){Error.call(this),Error.captureStackTrace?Error.captureStackTrace(this,this.constructor):this.stack=(new Error).stack,this.message=e,this.name="AxiosError",t&&(this.code=t),n&&(this.config=n),r&&(this.request=r),o&&(this.response=o);}q.inherits(M,Error,{toJSON:function(){return {message:this.message,name:this.name,description:this.description,number:this.number,fileName:this.fileName,lineNumber:this.lineNumber,columnNumber:this.columnNumber,stack:this.stack,config:q.toJSONObject(this.config),code:this.code,status:this.response&&this.response.status?this.response.status:null}}});var z=M.prototype,H={};["ERR_BAD_OPTION_VALUE","ERR_BAD_OPTION","ECONNABORTED","ETIMEDOUT","ERR_NETWORK","ERR_FR_TOO_MANY_REDIRECTS","ERR_DEPRECATED","ERR_BAD_RESPONSE","ERR_BAD_REQUEST","ERR_CANCELED","ERR_NOT_SUPPORT","ERR_INVALID_URL"].forEach((function(e){H[e]={value:e};})),Object.defineProperties(M,H),Object.defineProperty(z,"isAxiosError",{value:!0}),M.from=function(e,t,n,r,o,i){var a=Object.create(z);return q.toFlatObject(e,a,(function(e){return e!==Error.prototype}),(function(e){return "isAxiosError"!==e})),M.call(a,e.message,t,n,r,o),a.cause=e,a.name=e.name,i&&Object.assign(a,i),a};function J(e){return q.isPlainObject(e)||q.isArray(e)}function W(e){return q.endsWith(e,"[]")?e.slice(0,-2):e}function K(e,t,n){return e?e.concat(t).map((function(e,t){return e=W(e),!n&&t?"["+e+"]":e})).join(n?".":""):t}var V=q.toFlatObject(q,{},null,(function(e){return /^is[A-Z]/.test(e)}));function G(t,n,r){if(!q.isObject(t))throw new TypeError("target must be an object");n=n||new FormData;var o=(r=q.toFlatObject(r,{metaTokens:!0,dots:!1,indexes:!1},!1,(function(e,t){return !q.isUndefined(t[e])}))).metaTokens,i=r.visitor||f,a=r.dots,s=r.indexes,u=(r.Blob||"undefined"!=typeof Blob&&Blob)&&q.isSpecCompliantForm(n);if(!q.isFunction(i))throw new TypeError("visitor must be a function");function c(e){if(null===e)return "";if(q.isDate(e))return e.toISOString();if(!u&&q.isBlob(e))throw new M("Blob is not supported. Use a Buffer instead.");return q.isArrayBuffer(e)||q.isTypedArray(e)?u&&"function"==typeof Blob?new Blob([e]):Buffer.from(e):e}function f(t,r,i){var u=t;if(t&&!i&&"object"===e(t))if(q.endsWith(r,"{}"))r=o?r:r.slice(0,-2),t=JSON.stringify(t);else if(q.isArray(t)&&function(e){return q.isArray(e)&&!e.some(J)}(t)||(q.isFileList(t)||q.endsWith(r,"[]"))&&(u=q.toArray(t)))return r=W(r),u.forEach((function(e,t){!q.isUndefined(e)&&null!==e&&n.append(!0===s?K([r],t,a):null===s?r:r+"[]",c(e));})),!1;return !!J(t)||(n.append(K(i,r,a),c(t)),!1)}var l=[],d=Object.assign(V,{defaultVisitor:f,convertValue:c,isVisitable:J});if(!q.isObject(t))throw new TypeError("data must be an object");return function e(t,r){if(!q.isUndefined(t)){if(-1!==l.indexOf(t))throw Error("Circular reference detected in "+r.join("."));l.push(t),q.forEach(t,(function(t,o){!0===(!(q.isUndefined(t)||null===t)&&i.call(n,t,q.isString(o)?o.trim():o,r,d))&&e(t,r?r.concat(o):[o]);})),l.pop();}}(t),n}function $(e){var t={"!":"%21","'":"%27","(":"%28",")":"%29","~":"%7E","%20":"+","%00":"\0"};return encodeURIComponent(e).replace(/[!'()~]|%20|%00/g,(function(e){return t[e]}))}function X(e,t){this._pairs=[],e&&G(e,this,t);}var Q=X.prototype;function Z(e){return encodeURIComponent(e).replace(/%3A/gi,":").replace(/%24/g,"$").replace(/%2C/gi,",").replace(/%20/g,"+").replace(/%5B/gi,"[").replace(/%5D/gi,"]")}function Y(e,t,n){if(!t)return e;var r,o=n&&n.encode||Z,i=n&&n.serialize;if(r=i?i(t,n):q.isURLSearchParams(t)?t.toString():new X(t,n).toString(o)){var a=e.indexOf("#");-1!==a&&(e=e.slice(0,a)),e+=(-1===e.indexOf("?")?"?":"&")+r;}return e}Q.append=function(e,t){this._pairs.push([e,t]);},Q.toString=function(e){var t=e?function(t){return e.call(this,t,$)}:$;return this._pairs.map((function(e){return t(e[0])+"="+t(e[1])}),"").join("&")};var ee,te=function(){function e(){t(this,e),this.handlers=[];}return r(e,[{key:"use",value:function(e,t,n){return this.handlers.push({fulfilled:e,rejected:t,synchronous:!!n&&n.synchronous,runWhen:n?n.runWhen:null}),this.handlers.length-1}},{key:"eject",value:function(e){this.handlers[e]&&(this.handlers[e]=null);}},{key:"clear",value:function(){this.handlers&&(this.handlers=[]);}},{key:"forEach",value:function(e){q.forEach(this.handlers,(function(t){null!==t&&e(t);}));}}]),e}(),ne={silentJSONParsing:!0,forcedJSONParsing:!0,clarifyTimeoutError:!1},re={isBrowser:!0,classes:{URLSearchParams:"undefined"!=typeof URLSearchParams?URLSearchParams:X,FormData:"undefined"!=typeof FormData?FormData:null,Blob:"undefined"!=typeof Blob?Blob:null},isStandardBrowserEnv:("undefined"==typeof navigator||"ReactNative"!==(ee=navigator.product)&&"NativeScript"!==ee&&"NS"!==ee)&&"undefined"!=typeof window&&"undefined"!=typeof document,isStandardBrowserWebWorkerEnv:"undefined"!=typeof WorkerGlobalScope&&self instanceof WorkerGlobalScope&&"function"==typeof self.importScripts,protocols:["http","https","file","blob","url","data"]};function oe(e){function t(e,n,r,o){var i=e[o++],a=Number.isFinite(+i),s=o>=e.length;return i=!i&&q.isArray(r)?r.length:i,s?(q.hasOwnProp(r,i)?r[i]=[r[i],n]:r[i]=n,!a):(r[i]&&q.isObject(r[i])||(r[i]=[]),t(e,n,r[i],o)&&q.isArray(r[i])&&(r[i]=function(e){var t,n,r={},o=Object.keys(e),i=o.length;for(t=0;t<i;t++)r[n=o[t]]=e[n];return r}(r[i])),!a)}if(q.isFormData(e)&&q.isFunction(e.entries)){var n={};return q.forEachEntry(e,(function(e,r){t(function(e){return q.matchAll(/\w+|\[(\w*)]/g,e).map((function(e){return "[]"===e[0]?"":e[1]||e[0]}))}(e),r,n,0);})),n}return null}var ie={transitional:ne,adapter:re.isNode?"http":"xhr",transformRequest:[function(e,t){var n,r=t.getContentType()||"",o=r.indexOf("application/json")>-1,i=q.isObject(e);if(i&&q.isHTMLForm(e)&&(e=new FormData(e)),q.isFormData(e))return o&&o?JSON.stringify(oe(e)):e;if(q.isArrayBuffer(e)||q.isBuffer(e)||q.isStream(e)||q.isFile(e)||q.isBlob(e))return e;if(q.isArrayBufferView(e))return e.buffer;if(q.isURLSearchParams(e))return t.setContentType("application/x-www-form-urlencoded;charset=utf-8",!1),e.toString();if(i){if(r.indexOf("application/x-www-form-urlencoded")>-1)return function(e,t){return G(e,new re.classes.URLSearchParams,Object.assign({visitor:function(e,t,n,r){return re.isNode&&q.isBuffer(e)?(this.append(t,e.toString("base64")),!1):r.defaultVisitor.apply(this,arguments)}},t))}(e,this.formSerializer).toString();if((n=q.isFileList(e))||r.indexOf("multipart/form-data")>-1){var a=this.env&&this.env.FormData;return G(n?{"files[]":e}:e,a&&new a,this.formSerializer)}}return i||o?(t.setContentType("application/json",!1),function(e,t,n){if(q.isString(e))try{return (t||JSON.parse)(e),q.trim(e)}catch(e){if("SyntaxError"!==e.name)throw e}return (n||JSON.stringify)(e)}(e)):e}],transformResponse:[function(e){var t=this.transitional||ie.transitional,n=t&&t.forcedJSONParsing,r="json"===this.responseType;if(e&&q.isString(e)&&(n&&!this.responseType||r)){var o=!(t&&t.silentJSONParsing)&&r;try{return JSON.parse(e)}catch(e){if(o){if("SyntaxError"===e.name)throw M.from(e,M.ERR_BAD_RESPONSE,this,null,this.response);throw e}}}return e}],timeout:0,xsrfCookieName:"XSRF-TOKEN",xsrfHeaderName:"X-XSRF-TOKEN",maxContentLength:-1,maxBodyLength:-1,env:{FormData:re.classes.FormData,Blob:re.classes.Blob},validateStatus:function(e){return e>=200&&e<300},headers:{common:{Accept:"application/json, text/plain, */*","Content-Type":void 0}}};q.forEach(["delete","get","head","post","put","patch"],(function(e){ie.headers[e]={};}));var ae=ie,se=q.toObjectSet(["age","authorization","content-length","content-type","etag","expires","from","host","if-modified-since","if-unmodified-since","last-modified","location","max-forwards","proxy-authorization","referer","retry-after","user-agent"]),ue=Symbol("internals");function ce(e){return e&&String(e).trim().toLowerCase()}function fe(e){return !1===e||null==e?e:q.isArray(e)?e.map(fe):String(e)}function le(e,t,n,r,o){return q.isFunction(r)?r.call(this,t,n):(o&&(t=n),q.isString(t)?q.isString(r)?-1!==t.indexOf(r):q.isRegExp(r)?r.test(t):void 0:void 0)}var de=function(e,n){function i(e){t(this,i),e&&this.set(e);}return r(i,[{key:"set",value:function(e,t,n){var r=this;function o(e,t,n){var o=ce(t);if(!o)throw new Error("header name must be a non-empty string");var i=q.findKey(r,o);(!i||void 0===r[i]||!0===n||void 0===n&&!1!==r[i])&&(r[i||t]=fe(e));}var i,a,s,u,c,f=function(e,t){return q.forEach(e,(function(e,n){return o(e,n,t)}))};return q.isPlainObject(e)||e instanceof this.constructor?f(e,t):q.isString(e)&&(e=e.trim())&&!/^[-_a-zA-Z0-9^`|~,!#$%&'*+.]+$/.test(e.trim())?f((c={},(i=e)&&i.split("\n").forEach((function(e){u=e.indexOf(":"),a=e.substring(0,u).trim().toLowerCase(),s=e.substring(u+1).trim(),!a||c[a]&&se[a]||("set-cookie"===a?c[a]?c[a].push(s):c[a]=[s]:c[a]=c[a]?c[a]+", "+s:s);})),c),t):null!=e&&o(t,e,n),this}},{key:"get",value:function(e,t){if(e=ce(e)){var n=q.findKey(this,e);if(n){var r=this[n];if(!t)return r;if(!0===t)return function(e){for(var t,n=Object.create(null),r=/([^\s,;=]+)\s*(?:=\s*([^,;]+))?/g;t=r.exec(e);)n[t[1]]=t[2];return n}(r);if(q.isFunction(t))return t.call(this,r,n);if(q.isRegExp(t))return t.exec(r);throw new TypeError("parser must be boolean|regexp|function")}}}},{key:"has",value:function(e,t){if(e=ce(e)){var n=q.findKey(this,e);return !(!n||void 0===this[n]||t&&!le(0,this[n],n,t))}return !1}},{key:"delete",value:function(e,t){var n=this,r=!1;function o(e){if(e=ce(e)){var o=q.findKey(n,e);!o||t&&!le(0,n[o],o,t)||(delete n[o],r=!0);}}return q.isArray(e)?e.forEach(o):o(e),r}},{key:"clear",value:function(e){for(var t=Object.keys(this),n=t.length,r=!1;n--;){var o=t[n];e&&!le(0,this[o],o,e,!0)||(delete this[o],r=!0);}return r}},{key:"normalize",value:function(e){var t=this,n={};return q.forEach(this,(function(r,o){var i=q.findKey(n,o);if(i)return t[i]=fe(r),void delete t[o];var a=e?function(e){return e.trim().toLowerCase().replace(/([a-z\d])(\w*)/g,(function(e,t,n){return t.toUpperCase()+n}))}(o):String(o).trim();a!==o&&delete t[o],t[a]=fe(r),n[a]=!0;})),this}},{key:"concat",value:function(){for(var e,t=arguments.length,n=new Array(t),r=0;r<t;r++)n[r]=arguments[r];return (e=this.constructor).concat.apply(e,[this].concat(n))}},{key:"toJSON",value:function(e){var t=Object.create(null);return q.forEach(this,(function(n,r){null!=n&&!1!==n&&(t[r]=e&&q.isArray(n)?n.join(", "):n);})),t}},{key:Symbol.iterator,value:function(){return Object.entries(this.toJSON())[Symbol.iterator]()}},{key:"toString",value:function(){return Object.entries(this.toJSON()).map((function(e){var t=o(e,2);return t[0]+": "+t[1]})).join("\n")}},{key:Symbol.toStringTag,get:function(){return "AxiosHeaders"}}],[{key:"from",value:function(e){return e instanceof this?e:new this(e)}},{key:"concat",value:function(e){for(var t=new this(e),n=arguments.length,r=new Array(n>1?n-1:0),o=1;o<n;o++)r[o-1]=arguments[o];return r.forEach((function(e){return t.set(e)})),t}},{key:"accessor",value:function(e){var t=(this[ue]=this[ue]={accessors:{}}).accessors,n=this.prototype;function r(e){var r=ce(e);t[r]||(!function(e,t){var n=q.toCamelCase(" "+t);["get","set","has"].forEach((function(r){Object.defineProperty(e,r+n,{value:function(e,n,o){return this[r].call(this,t,e,n,o)},configurable:!0});}));}(n,e),t[r]=!0);}return q.isArray(e)?e.forEach(r):r(e),this}}]),i}();de.accessor(["Content-Type","Content-Length","Accept","Accept-Encoding","User-Agent","Authorization"]),q.reduceDescriptors(de.prototype,(function(e,t){var n=e.value,r=t[0].toUpperCase()+t.slice(1);return {get:function(){return n},set:function(e){this[r]=e;}}})),q.freezeMethods(de);var pe=de;function he(e,t){var n=this||ae,r=t||n,o=pe.from(r.headers),i=r.data;return q.forEach(e,(function(e){i=e.call(n,i,o.normalize(),t?t.status:void 0);})),o.normalize(),i}function me(e){return !(!e||!e.__CANCEL__)}function ye(e,t,n){M.call(this,null==e?"canceled":e,M.ERR_CANCELED,t,n),this.name="CanceledError";}q.inherits(ye,M,{__CANCEL__:!0});var ve=re.isStandardBrowserEnv?{write:function(e,t,n,r,o,i){var a=[];a.push(e+"="+encodeURIComponent(t)),q.isNumber(n)&&a.push("expires="+new Date(n).toGMTString()),q.isString(r)&&a.push("path="+r),q.isString(o)&&a.push("domain="+o),!0===i&&a.push("secure"),document.cookie=a.join("; ");},read:function(e){var t=document.cookie.match(new RegExp("(^|;\\s*)("+e+")=([^;]*)"));return t?decodeURIComponent(t[3]):null},remove:function(e){this.write(e,"",Date.now()-864e5);}}:{write:function(){},read:function(){return null},remove:function(){}};function be(e,t){return e&&!/^([a-z][a-z\d+\-.]*:)?\/\//i.test(t)?function(e,t){return t?e.replace(/\/+$/,"")+"/"+t.replace(/^\/+/,""):e}(e,t):t}var ge=re.isStandardBrowserEnv?function(){var e,t=/(msie|trident)/i.test(navigator.userAgent),n=document.createElement("a");function r(e){var r=e;return t&&(n.setAttribute("href",r),r=n.href),n.setAttribute("href",r),{href:n.href,protocol:n.protocol?n.protocol.replace(/:$/,""):"",host:n.host,search:n.search?n.search.replace(/^\?/,""):"",hash:n.hash?n.hash.replace(/^#/,""):"",hostname:n.hostname,port:n.port,pathname:"/"===n.pathname.charAt(0)?n.pathname:"/"+n.pathname}}return e=r(window.location.href),function(t){var n=q.isString(t)?r(t):t;return n.protocol===e.protocol&&n.host===e.host}}():function(){return !0};function we(e,t){var n=0,r=function(e,t){e=e||10;var n,r=new Array(e),o=new Array(e),i=0,a=0;return t=void 0!==t?t:1e3,function(s){var u=Date.now(),c=o[a];n||(n=u),r[i]=s,o[i]=u;for(var f=a,l=0;f!==i;)l+=r[f++],f%=e;if((i=(i+1)%e)===a&&(a=(a+1)%e),!(u-n<t)){var d=c&&u-c;return d?Math.round(1e3*l/d):void 0}}}(50,250);return function(o){var i=o.loaded,a=o.lengthComputable?o.total:void 0,s=i-n,u=r(s);n=i;var c={loaded:i,total:a,progress:a?i/a:void 0,bytes:s,rate:u||void 0,estimated:u&&a&&i<=a?(a-i)/u:void 0,event:o};c[t?"download":"upload"]=!0,e(c);}}var Ee={http:null,xhr:"undefined"!=typeof XMLHttpRequest&&function(e){return new Promise((function(t,n){var r,o=e.data,i=pe.from(e.headers).normalize(),a=e.responseType;function s(){e.cancelToken&&e.cancelToken.unsubscribe(r),e.signal&&e.signal.removeEventListener("abort",r);}q.isFormData(o)&&(re.isStandardBrowserEnv||re.isStandardBrowserWebWorkerEnv?i.setContentType(!1):i.setContentType("multipart/form-data;",!1));var u=new XMLHttpRequest;if(e.auth){var c=e.auth.username||"",f=e.auth.password?unescape(encodeURIComponent(e.auth.password)):"";i.set("Authorization","Basic "+btoa(c+":"+f));}var l=be(e.baseURL,e.url);function d(){if(u){var r=pe.from("getAllResponseHeaders"in u&&u.getAllResponseHeaders());!function(e,t,n){var r=n.config.validateStatus;n.status&&r&&!r(n.status)?t(new M("Request failed with status code "+n.status,[M.ERR_BAD_REQUEST,M.ERR_BAD_RESPONSE][Math.floor(n.status/100)-4],n.config,n.request,n)):e(n);}((function(e){t(e),s();}),(function(e){n(e),s();}),{data:a&&"text"!==a&&"json"!==a?u.response:u.responseText,status:u.status,statusText:u.statusText,headers:r,config:e,request:u}),u=null;}}if(u.open(e.method.toUpperCase(),Y(l,e.params,e.paramsSerializer),!0),u.timeout=e.timeout,"onloadend"in u?u.onloadend=d:u.onreadystatechange=function(){u&&4===u.readyState&&(0!==u.status||u.responseURL&&0===u.responseURL.indexOf("file:"))&&setTimeout(d);},u.onabort=function(){u&&(n(new M("Request aborted",M.ECONNABORTED,e,u)),u=null);},u.onerror=function(){n(new M("Network Error",M.ERR_NETWORK,e,u)),u=null;},u.ontimeout=function(){var t=e.timeout?"timeout of "+e.timeout+"ms exceeded":"timeout exceeded",r=e.transitional||ne;e.timeoutErrorMessage&&(t=e.timeoutErrorMessage),n(new M(t,r.clarifyTimeoutError?M.ETIMEDOUT:M.ECONNABORTED,e,u)),u=null;},re.isStandardBrowserEnv){var p=(e.withCredentials||ge(l))&&e.xsrfCookieName&&ve.read(e.xsrfCookieName);p&&i.set(e.xsrfHeaderName,p);}void 0===o&&i.setContentType(null),"setRequestHeader"in u&&q.forEach(i.toJSON(),(function(e,t){u.setRequestHeader(t,e);})),q.isUndefined(e.withCredentials)||(u.withCredentials=!!e.withCredentials),a&&"json"!==a&&(u.responseType=e.responseType),"function"==typeof e.onDownloadProgress&&u.addEventListener("progress",we(e.onDownloadProgress,!0)),"function"==typeof e.onUploadProgress&&u.upload&&u.upload.addEventListener("progress",we(e.onUploadProgress)),(e.cancelToken||e.signal)&&(r=function(t){u&&(n(!t||t.type?new ye(null,e,u):t),u.abort(),u=null);},e.cancelToken&&e.cancelToken.subscribe(r),e.signal&&(e.signal.aborted?r():e.signal.addEventListener("abort",r)));var h,m=(h=/^([-+\w]{1,25})(:?\/\/|:)/.exec(l))&&h[1]||"";m&&-1===re.protocols.indexOf(m)?n(new M("Unsupported protocol "+m+":",M.ERR_BAD_REQUEST,e)):u.send(o||null);}))}};q.forEach(Ee,(function(e,t){if(e){try{Object.defineProperty(e,"name",{value:t});}catch(e){}Object.defineProperty(e,"adapterName",{value:t});}}));var Oe=function(e){for(var t,n,r=(e=q.isArray(e)?e:[e]).length,o=0;o<r&&(t=e[o],!(n=q.isString(t)?Ee[t.toLowerCase()]:t));o++);if(!n){if(!1===n)throw new M("Adapter ".concat(t," is not supported by the environment"),"ERR_NOT_SUPPORT");throw new Error(q.hasOwnProp(Ee,t)?"Adapter '".concat(t,"' is not available in the build"):"Unknown adapter '".concat(t,"'"))}if(!q.isFunction(n))throw new TypeError("adapter is not a function");return n};function Se(e){if(e.cancelToken&&e.cancelToken.throwIfRequested(),e.signal&&e.signal.aborted)throw new ye(null,e)}function Re(e){return Se(e),e.headers=pe.from(e.headers),e.data=he.call(e,e.transformRequest),-1!==["post","put","patch"].indexOf(e.method)&&e.headers.setContentType("application/x-www-form-urlencoded",!1),Oe(e.adapter||ae.adapter)(e).then((function(t){return Se(e),t.data=he.call(e,e.transformResponse,t),t.headers=pe.from(t.headers),t}),(function(t){return me(t)||(Se(e),t&&t.response&&(t.response.data=he.call(e,e.transformResponse,t.response),t.response.headers=pe.from(t.response.headers))),Promise.reject(t)}))}var Ae=function(e){return e instanceof pe?e.toJSON():e};function Te(e,t){t=t||{};var n={};function r(e,t,n){return q.isPlainObject(e)&&q.isPlainObject(t)?q.merge.call({caseless:n},e,t):q.isPlainObject(t)?q.merge({},t):q.isArray(t)?t.slice():t}function o(e,t,n){return q.isUndefined(t)?q.isUndefined(e)?void 0:r(void 0,e,n):r(e,t,n)}function i(e,t){if(!q.isUndefined(t))return r(void 0,t)}function a(e,t){return q.isUndefined(t)?q.isUndefined(e)?void 0:r(void 0,e):r(void 0,t)}function s(n,o,i){return i in t?r(n,o):i in e?r(void 0,n):void 0}var u={url:i,method:i,data:i,baseURL:a,transformRequest:a,transformResponse:a,paramsSerializer:a,timeout:a,timeoutMessage:a,withCredentials:a,adapter:a,responseType:a,xsrfCookieName:a,xsrfHeaderName:a,onUploadProgress:a,onDownloadProgress:a,decompress:a,maxContentLength:a,maxBodyLength:a,beforeRedirect:a,transport:a,httpAgent:a,httpsAgent:a,cancelToken:a,socketPath:a,responseEncoding:a,validateStatus:s,headers:function(e,t){return o(Ae(e),Ae(t),!0)}};return q.forEach(Object.keys(Object.assign({},e,t)),(function(r){var i=u[r]||o,a=i(e[r],t[r],r);q.isUndefined(a)&&i!==s||(n[r]=a);})),n}var je="1.5.0",Ne={};["object","boolean","number","function","string","symbol"].forEach((function(t,n){Ne[t]=function(r){return e(r)===t||"a"+(n<1?"n ":" ")+t};}));var Ce={};Ne.transitional=function(e,t,n){function r(e,t){return "[Axios v1.5.0] Transitional option '"+e+"'"+t+(n?". "+n:"")}return function(n,o,i){if(!1===e)throw new M(r(o," has been removed"+(t?" in "+t:"")),M.ERR_DEPRECATED);return t&&!Ce[o]&&(Ce[o]=!0,console.warn(r(o," has been deprecated since v"+t+" and will be removed in the near future"))),!e||e(n,o,i)}};var xe={assertOptions:function(t,n,r){if("object"!==e(t))throw new M("options must be an object",M.ERR_BAD_OPTION_VALUE);for(var o=Object.keys(t),i=o.length;i-- >0;){var a=o[i],s=n[a];if(s){var u=t[a],c=void 0===u||s(u,a,t);if(!0!==c)throw new M("option "+a+" must be "+c,M.ERR_BAD_OPTION_VALUE)}else if(!0!==r)throw new M("Unknown option "+a,M.ERR_BAD_OPTION)}},validators:Ne},Pe=xe.validators,ke=function(){function e(n){t(this,e),this.defaults=n,this.interceptors={request:new te,response:new te};}return r(e,[{key:"request",value:function(e,t){"string"==typeof e?(t=t||{}).url=e:t=e||{};var n=t=Te(this.defaults,t),r=n.transitional,o=n.paramsSerializer,i=n.headers;void 0!==r&&xe.assertOptions(r,{silentJSONParsing:Pe.transitional(Pe.boolean),forcedJSONParsing:Pe.transitional(Pe.boolean),clarifyTimeoutError:Pe.transitional(Pe.boolean)},!1),null!=o&&(q.isFunction(o)?t.paramsSerializer={serialize:o}:xe.assertOptions(o,{encode:Pe.function,serialize:Pe.function},!0)),t.method=(t.method||this.defaults.method||"get").toLowerCase();var a=i&&q.merge(i.common,i[t.method]);i&&q.forEach(["delete","get","head","post","put","patch","common"],(function(e){delete i[e];})),t.headers=pe.concat(a,i);var s=[],u=!0;this.interceptors.request.forEach((function(e){"function"==typeof e.runWhen&&!1===e.runWhen(t)||(u=u&&e.synchronous,s.unshift(e.fulfilled,e.rejected));}));var c,f=[];this.interceptors.response.forEach((function(e){f.push(e.fulfilled,e.rejected);}));var l,d=0;if(!u){var p=[Re.bind(this),void 0];for(p.unshift.apply(p,s),p.push.apply(p,f),l=p.length,c=Promise.resolve(t);d<l;)c=c.then(p[d++],p[d++]);return c}l=s.length;var h=t;for(d=0;d<l;){var m=s[d++],y=s[d++];try{h=m(h);}catch(e){y.call(this,e);break}}try{c=Re.call(this,h);}catch(e){return Promise.reject(e)}for(d=0,l=f.length;d<l;)c=c.then(f[d++],f[d++]);return c}},{key:"getUri",value:function(e){return Y(be((e=Te(this.defaults,e)).baseURL,e.url),e.params,e.paramsSerializer)}}]),e}();q.forEach(["delete","get","head","options"],(function(e){ke.prototype[e]=function(t,n){return this.request(Te(n||{},{method:e,url:t,data:(n||{}).data}))};})),q.forEach(["post","put","patch"],(function(e){function t(t){return function(n,r,o){return this.request(Te(o||{},{method:e,headers:t?{"Content-Type":"multipart/form-data"}:{},url:n,data:r}))}}ke.prototype[e]=t(),ke.prototype[e+"Form"]=t(!0);}));var Ue=ke,_e=function(){function e(n){if(t(this,e),"function"!=typeof n)throw new TypeError("executor must be a function.");var r;this.promise=new Promise((function(e){r=e;}));var o=this;this.promise.then((function(e){if(o._listeners){for(var t=o._listeners.length;t-- >0;)o._listeners[t](e);o._listeners=null;}})),this.promise.then=function(e){var t,n=new Promise((function(e){o.subscribe(e),t=e;})).then(e);return n.cancel=function(){o.unsubscribe(t);},n},n((function(e,t,n){o.reason||(o.reason=new ye(e,t,n),r(o.reason));}));}return r(e,[{key:"throwIfRequested",value:function(){if(this.reason)throw this.reason}},{key:"subscribe",value:function(e){this.reason?e(this.reason):this._listeners?this._listeners.push(e):this._listeners=[e];}},{key:"unsubscribe",value:function(e){if(this._listeners){var t=this._listeners.indexOf(e);-1!==t&&this._listeners.splice(t,1);}}}],[{key:"source",value:function(){var t;return {token:new e((function(e){t=e;})),cancel:t}}}]),e}();var Fe={Continue:100,SwitchingProtocols:101,Processing:102,EarlyHints:103,Ok:200,Created:201,Accepted:202,NonAuthoritativeInformation:203,NoContent:204,ResetContent:205,PartialContent:206,MultiStatus:207,AlreadyReported:208,ImUsed:226,MultipleChoices:300,MovedPermanently:301,Found:302,SeeOther:303,NotModified:304,UseProxy:305,Unused:306,TemporaryRedirect:307,PermanentRedirect:308,BadRequest:400,Unauthorized:401,PaymentRequired:402,Forbidden:403,NotFound:404,MethodNotAllowed:405,NotAcceptable:406,ProxyAuthenticationRequired:407,RequestTimeout:408,Conflict:409,Gone:410,LengthRequired:411,PreconditionFailed:412,PayloadTooLarge:413,UriTooLong:414,UnsupportedMediaType:415,RangeNotSatisfiable:416,ExpectationFailed:417,ImATeapot:418,MisdirectedRequest:421,UnprocessableEntity:422,Locked:423,FailedDependency:424,TooEarly:425,UpgradeRequired:426,PreconditionRequired:428,TooManyRequests:429,RequestHeaderFieldsTooLarge:431,UnavailableForLegalReasons:451,InternalServerError:500,NotImplemented:501,BadGateway:502,ServiceUnavailable:503,GatewayTimeout:504,HttpVersionNotSupported:505,VariantAlsoNegotiates:506,InsufficientStorage:507,LoopDetected:508,NotExtended:510,NetworkAuthenticationRequired:511};Object.entries(Fe).forEach((function(e){var t=o(e,2),n=t[0],r=t[1];Fe[r]=n;}));var Be=Fe;var Le=function e(t){var n=new Ue(t),r=a(Ue.prototype.request,n);return q.extend(r,Ue.prototype,n,{allOwnKeys:!0}),q.extend(r,n,null,{allOwnKeys:!0}),r.create=function(n){return e(Te(t,n))},r}(ae);return Le.Axios=Ue,Le.CanceledError=ye,Le.CancelToken=_e,Le.isCancel=me,Le.VERSION=je,Le.toFormData=G,Le.AxiosError=M,Le.Cancel=Le.CanceledError,Le.all=function(e){return Promise.all(e)},Le.spread=function(e){return function(t){return e.apply(null,t)}},Le.isAxiosError=function(e){return q.isObject(e)&&!0===e.isAxiosError},Le.mergeConfig=Te,Le.AxiosHeaders=pe,Le.formToJSON=function(e){return oe(q.isHTMLForm(e)?new FormData(e):e)},Le.getAdapter=Oe,Le.HttpStatusCode=Be,Le.default=Le,Le}));
 
-	return {
-		c() {
-			meta0 = element("meta");
-			t = space();
-			meta1 = element("meta");
-			this.h();
-		},
-		l(nodes) {
-			meta0 = claim_element(nodes, "META", { property: true, content: true });
-			t = claim_space(nodes);
-			meta1 = claim_element(nodes, "META", { name: true, content: true });
-			this.h();
-		},
-		h() {
-			attr(meta0, "property", "og:image");
-			attr(meta0, "content", meta0_content_value = /*image*/ ctx[1].url);
-			attr(meta1, "name", "twitter:image");
-			attr(meta1, "content", meta1_content_value = /*image*/ ctx[1].url);
-		},
-		m(target, anchor) {
-			insert_hydration(target, meta0, anchor);
-			insert_hydration(target, t, anchor);
-			insert_hydration(target, meta1, anchor);
-		},
-		p(ctx, dirty) {
-			if (dirty & /*image*/ 2 && meta0_content_value !== (meta0_content_value = /*image*/ ctx[1].url)) {
-				attr(meta0, "content", meta0_content_value);
-			}
 
-			if (dirty & /*image*/ 2 && meta1_content_value !== (meta1_content_value = /*image*/ ctx[1].url)) {
-				attr(meta1, "content", meta1_content_value);
-			}
-		},
-		d(detaching) {
-			if (detaching) detach(meta0);
-			if (detaching) detach(t);
-			if (detaching) detach(meta1);
-		}
-	};
-}
 
-function create_fragment(ctx) {
-	let link0;
-	let link0_href_value;
-	let link1;
-	let link2;
-	let link3;
-	let link4;
-	let script;
-	let script_src_value;
-	let link5;
-	let link5_href_value;
-	let title_value;
-	let meta;
-	let style;
-	let t;
-	document.title = title_value = /*title*/ ctx[2];
-	let if_block = /*image*/ ctx[1].url && create_if_block(ctx);
 
-	return {
-		c() {
-			link0 = element("link");
-			link1 = element("link");
-			link2 = element("link");
-			link3 = element("link");
-			link4 = element("link");
-			script = element("script");
-			link5 = element("link");
-			meta = element("meta");
-			if (if_block) if_block.c();
-			style = element("style");
-			t = text("/* Reset & standardize default styles */\n@import url(\"https://unpkg.com/@primo-app/primo@1.3.64/reset.css\") layer;\n\n/* Design tokens (apply to components) */\n:root {\n  /* Custom theme options */\n  --color-accent: white;\n  --color-accent2: #260055;\n  --color-shade: #999999;\n\n  --inner-max-width: 800px;\n\n  /* Base values */\n  --box-shadow: 0px 2px 8px rgba(0, 0, 0, 0.1);\n  --border-radius: 2px;\n  --border-color: #e0e1e1;\n  --body-font: \"Merriweather\", serif;\n  --heading-font: \"Inter\", sans-serif;\n\n  --header-height: 92.8px;\n}\n\n/* Root element (use instead of `body`) */\n#page {\n  font-family: var(--heading-font);\n  color: white;\n  line-height: 1.5;\n  font-size: 1.125rem;\n  background: black;\n}\n\n/* Elements */\n.section-container {\n  max-width: 1150px;\n  margin: 0 auto;\n  padding: 5rem 2rem;\n}\n\na.link {\n  line-height: 1.3;\n  border-bottom: 2px solid var(--color-accent);\n  transform: translateY(-2px); /* move link back into place */\n  transition: var(--transition, 0.1s border);\n}\n\na.link:hover {\n    border-color: transparent;\n  }\n\n.heading {\n  font-size: clamp(2rem, 10vw, 3rem);\n  line-height: 1.1;\n  font-weight: 600;\n  letter-spacing: -0.15rem;\n}\n\n.button {\n  color: white;\n  background: var(--color-accent, rebeccapurple);\n  border-radius: 0;\n  padding: 1px 24px;\n  transition: var(--transition, 0.1s box-shadow);\n  border: 0; /* reset */\n  border-radius: 0.25rem;\n  font-size: 1rem;\n}\n\n.button:hover {\n    box-shadow: 0 0 0 2px var(--color-accent, rebeccapurple);\n  }\n\n.button.inverted {\n    background: transparent;\n    color: var(--color-accent, rebeccapurple);\n  }\n\nfooter {\n    bottom: 0;\n    position: absolute;\n    width: 100%;\n}");
-			this.h();
-		},
-		l(nodes) {
-			const head_nodes = head_selector('svelte-114o73h', document.head);
 
-			link0 = claim_element(head_nodes, "LINK", {
-				rel: true,
-				type: true,
-				sizes: true,
-				href: true
-			});
-
-			link1 = claim_element(head_nodes, "LINK", { rel: true, href: true });
-			link2 = claim_element(head_nodes, "LINK", { href: true, rel: true });
-			link3 = claim_element(head_nodes, "LINK", { href: true, rel: true });
-			link4 = claim_element(head_nodes, "LINK", { rel: true, href: true });
-			script = claim_element(head_nodes, "SCRIPT", { type: true, src: true });
-			var script_nodes = children(script);
-			script_nodes.forEach(detach);
-
-			link5 = claim_element(head_nodes, "LINK", {
-				rel: true,
-				type: true,
-				sizes: true,
-				href: true
-			});
-
-			meta = claim_element(head_nodes, "META", { name: true, content: true });
-			if (if_block) if_block.l(head_nodes);
-			style = claim_element(head_nodes, "STYLE", {});
-			var style_nodes = children(style);
-			t = claim_text(style_nodes, "/* Reset & standardize default styles */\n@import url(\"https://unpkg.com/@primo-app/primo@1.3.64/reset.css\") layer;\n\n/* Design tokens (apply to components) */\n:root {\n  /* Custom theme options */\n  --color-accent: white;\n  --color-accent2: #260055;\n  --color-shade: #999999;\n\n  --inner-max-width: 800px;\n\n  /* Base values */\n  --box-shadow: 0px 2px 8px rgba(0, 0, 0, 0.1);\n  --border-radius: 2px;\n  --border-color: #e0e1e1;\n  --body-font: \"Merriweather\", serif;\n  --heading-font: \"Inter\", sans-serif;\n\n  --header-height: 92.8px;\n}\n\n/* Root element (use instead of `body`) */\n#page {\n  font-family: var(--heading-font);\n  color: white;\n  line-height: 1.5;\n  font-size: 1.125rem;\n  background: black;\n}\n\n/* Elements */\n.section-container {\n  max-width: 1150px;\n  margin: 0 auto;\n  padding: 5rem 2rem;\n}\n\na.link {\n  line-height: 1.3;\n  border-bottom: 2px solid var(--color-accent);\n  transform: translateY(-2px); /* move link back into place */\n  transition: var(--transition, 0.1s border);\n}\n\na.link:hover {\n    border-color: transparent;\n  }\n\n.heading {\n  font-size: clamp(2rem, 10vw, 3rem);\n  line-height: 1.1;\n  font-weight: 600;\n  letter-spacing: -0.15rem;\n}\n\n.button {\n  color: white;\n  background: var(--color-accent, rebeccapurple);\n  border-radius: 0;\n  padding: 1px 24px;\n  transition: var(--transition, 0.1s box-shadow);\n  border: 0; /* reset */\n  border-radius: 0.25rem;\n  font-size: 1rem;\n}\n\n.button:hover {\n    box-shadow: 0 0 0 2px var(--color-accent, rebeccapurple);\n  }\n\n.button.inverted {\n    background: transparent;\n    color: var(--color-accent, rebeccapurple);\n  }\n\nfooter {\n    bottom: 0;\n    position: absolute;\n    width: 100%;\n}");
-			style_nodes.forEach(detach);
-			head_nodes.forEach(detach);
-			this.h();
-		},
-		h() {
-			attr(link0, "rel", "shortcut icon");
-			attr(link0, "type", "image/jpg");
-			attr(link0, "sizes", "32x32");
-			attr(link0, "href", link0_href_value = /*favicon*/ ctx[0].url);
-			attr(link1, "rel", "preconnect");
-			attr(link1, "href", "https://fonts.bunny.net");
-			attr(link2, "href", "https://fonts.bunny.net/css?family=inter:100,200,300,400,500,600,700,800,900");
-			attr(link2, "rel", "stylesheet");
-			attr(link3, "href", "https://fonts.bunny.net/css?family=merriweather:300,300i,400,400i,700,700i,900,900i");
-			attr(link3, "rel", "stylesheet");
-			attr(link4, "rel", "stylesheet");
-			attr(link4, "href", "https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.4.0/dist/themes/light.css");
-			attr(script, "type", "module");
-			if (!src_url_equal(script.src, script_src_value = "https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.4.0/dist/shoelace-autoloader.js")) attr(script, "src", script_src_value);
-			attr(link5, "rel", "shortcut icon");
-			attr(link5, "type", "image/jpg");
-			attr(link5, "sizes", "32x32");
-			attr(link5, "href", link5_href_value = /*favicon*/ ctx[0].url);
-			attr(meta, "name", "description");
-			attr(meta, "content", /*description*/ ctx[3]);
-		},
-		m(target, anchor) {
-			append_hydration(document.head, link0);
-			append_hydration(document.head, link1);
-			append_hydration(document.head, link2);
-			append_hydration(document.head, link3);
-			append_hydration(document.head, link4);
-			append_hydration(document.head, script);
-			append_hydration(document.head, link5);
-			append_hydration(document.head, meta);
-			if (if_block) if_block.m(document.head, null);
-			append_hydration(document.head, style);
-			append_hydration(style, t);
-		},
-		p(ctx, [dirty]) {
-			if (dirty & /*favicon*/ 1 && link0_href_value !== (link0_href_value = /*favicon*/ ctx[0].url)) {
-				attr(link0, "href", link0_href_value);
-			}
-
-			if (dirty & /*favicon*/ 1 && link5_href_value !== (link5_href_value = /*favicon*/ ctx[0].url)) {
-				attr(link5, "href", link5_href_value);
-			}
-
-			if (dirty & /*title*/ 4 && title_value !== (title_value = /*title*/ ctx[2])) {
-				document.title = title_value;
-			}
-
-			if (dirty & /*description*/ 8) {
-				attr(meta, "content", /*description*/ ctx[3]);
-			}
-
-			if (/*image*/ ctx[1].url) {
-				if (if_block) {
-					if_block.p(ctx, dirty);
-				} else {
-					if_block = create_if_block(ctx);
-					if_block.c();
-					if_block.m(style.parentNode, style);
-				}
-			} else if (if_block) {
-				if_block.d(1);
-				if_block = null;
-			}
-		},
-		i: noop,
-		o: noop,
-		d(detaching) {
-			detach(link0);
-			detach(link1);
-			detach(link2);
-			detach(link3);
-			detach(link4);
-			detach(script);
-			detach(link5);
-			detach(meta);
-			if (if_block) if_block.d(detaching);
-			detach(style);
-		}
-	};
-}
-
-function instance($$self, $$props, $$invalidate) {
-	let { favicon } = $$props;
-	let { image } = $$props;
-	let { title } = $$props;
-	let { description } = $$props;
-
-	$$self.$$set = $$props => {
-		if ('favicon' in $$props) $$invalidate(0, favicon = $$props.favicon);
-		if ('image' in $$props) $$invalidate(1, image = $$props.image);
-		if ('title' in $$props) $$invalidate(2, title = $$props.title);
-		if ('description' in $$props) $$invalidate(3, description = $$props.description);
-	};
-
-	return [favicon, image, title, description];
-}
-
-class Component extends SvelteComponent {
-	constructor(options) {
-		super();
-
-		init(this, options, instance, create_fragment, safe_not_equal, {
-			favicon: 0,
-			image: 1,
-			title: 2,
-			description: 3
-		});
-	}
-}
+var axios = module.exports;
 
 function fade(node, { delay = 0, duration = 400, easing = identity } = {}) {
     const o = +getComputedStyle(node).opacity;
@@ -1258,6 +968,7 @@ const stringToIcon = (value, validate, allowSimpleName, provider = "") => {
     const name2 = colonSeparated.pop();
     const prefix = colonSeparated.pop();
     const result = {
+      // Allow provider without '@': "provider:prefix:name"
       provider: colonSeparated.length > 0 ? colonSeparated[0] : provider,
       prefix,
       name: name2
@@ -1290,12 +1001,15 @@ const validateIconName = (icon, allowSimpleName) => {
   }
   return !!((icon.provider === "" || icon.provider.match(matchIconName)) && (allowSimpleName && icon.prefix === "" || icon.prefix.match(matchIconName)) && icon.name.match(matchIconName));
 };
-const defaultIconDimensions = Object.freeze({
-  left: 0,
-  top: 0,
-  width: 16,
-  height: 16
-});
+
+const defaultIconDimensions = Object.freeze(
+  {
+    left: 0,
+    top: 0,
+    width: 16,
+    height: 16
+  }
+);
 const defaultIconTransformations = Object.freeze({
   rotate: 0,
   vFlip: false,
@@ -1310,6 +1024,7 @@ const defaultExtendedIconProps = Object.freeze({
   body: "",
   hidden: false
 });
+
 function mergeIconTransformations(obj1, obj2) {
   const result = {};
   if (!obj1.hFlip !== !obj2.hFlip) {
@@ -1324,6 +1039,7 @@ function mergeIconTransformations(obj1, obj2) {
   }
   return result;
 }
+
 function mergeIconData(parent, child) {
   const result = mergeIconTransformations(parent, child);
   for (const key in defaultExtendedIconProps) {
@@ -1339,6 +1055,7 @@ function mergeIconData(parent, child) {
   }
   return result;
 }
+
 function getIconsTree(data, names) {
   const icons = data.icons;
   const aliases = data.aliases || /* @__PURE__ */ Object.create(null);
@@ -1360,17 +1077,22 @@ function getIconsTree(data, names) {
   (names || Object.keys(icons).concat(Object.keys(aliases))).forEach(resolve);
   return resolved;
 }
+
 function internalGetIconData(data, name, tree) {
   const icons = data.icons;
   const aliases = data.aliases || /* @__PURE__ */ Object.create(null);
   let currentProps = {};
   function parse(name2) {
-    currentProps = mergeIconData(icons[name2] || aliases[name2], currentProps);
+    currentProps = mergeIconData(
+      icons[name2] || aliases[name2],
+      currentProps
+    );
   }
   parse(name);
   tree.forEach(parse);
   return mergeIconData(data, currentProps);
 }
+
 function parseIconSet(data, callback) {
   const names = [];
   if (typeof data !== "object" || typeof data.icons !== "object") {
@@ -1392,6 +1114,7 @@ function parseIconSet(data, callback) {
   }
   return names;
 }
+
 const optionalPropertyDefaults = {
   provider: "",
   aliases: {},
@@ -1420,7 +1143,10 @@ function quicklyValidateIconSet(obj) {
   const icons = data.icons;
   for (const name in icons) {
     const icon = icons[name];
-    if (!name.match(matchIconName) || typeof icon.body !== "string" || !checkOptionalProps(icon, defaultExtendedIconProps)) {
+    if (!name.match(matchIconName) || typeof icon.body !== "string" || !checkOptionalProps(
+      icon,
+      defaultExtendedIconProps
+    )) {
       return null;
     }
   }
@@ -1428,12 +1154,16 @@ function quicklyValidateIconSet(obj) {
   for (const name in aliases) {
     const icon = aliases[name];
     const parent = icon.parent;
-    if (!name.match(matchIconName) || typeof parent !== "string" || !icons[parent] && !aliases[parent] || !checkOptionalProps(icon, defaultExtendedIconProps)) {
+    if (!name.match(matchIconName) || typeof parent !== "string" || !icons[parent] && !aliases[parent] || !checkOptionalProps(
+      icon,
+      defaultExtendedIconProps
+    )) {
       return null;
     }
   }
   return data;
 }
+
 const dataStorage = /* @__PURE__ */ Object.create(null);
 function newStorage(provider, prefix) {
   return {
@@ -1447,28 +1177,29 @@ function getStorage(provider, prefix) {
   const providerStorage = dataStorage[provider] || (dataStorage[provider] = /* @__PURE__ */ Object.create(null));
   return providerStorage[prefix] || (providerStorage[prefix] = newStorage(provider, prefix));
 }
-function addIconSet(storage2, data) {
+function addIconSet(storage, data) {
   if (!quicklyValidateIconSet(data)) {
     return [];
   }
   return parseIconSet(data, (name, icon) => {
     if (icon) {
-      storage2.icons[name] = icon;
+      storage.icons[name] = icon;
     } else {
-      storage2.missing.add(name);
+      storage.missing.add(name);
     }
   });
 }
-function addIconToStorage(storage2, name, icon) {
+function addIconToStorage(storage, name, icon) {
   try {
     if (typeof icon.body === "string") {
-      storage2.icons[name] = {...icon};
+      storage.icons[name] = { ...icon };
       return true;
     }
   } catch (err) {
   }
   return false;
 }
+
 let simpleNames = false;
 function allowSimpleNames(allow) {
   if (typeof allow === "boolean") {
@@ -1479,9 +1210,9 @@ function allowSimpleNames(allow) {
 function getIconData(name) {
   const icon = typeof name === "string" ? stringToIcon(name, true, simpleNames) : name;
   if (icon) {
-    const storage2 = getStorage(icon.provider, icon.prefix);
+    const storage = getStorage(icon.provider, icon.prefix);
     const iconName = icon.name;
-    return storage2.icons[iconName] || (storage2.missing.has(iconName) ? null : void 0);
+    return storage.icons[iconName] || (storage.missing.has(iconName) ? null : void 0);
   }
 }
 function addIcon(name, data) {
@@ -1489,8 +1220,8 @@ function addIcon(name, data) {
   if (!icon) {
     return false;
   }
-  const storage2 = getStorage(icon.provider, icon.prefix);
-  return addIconToStorage(storage2, icon.name, data);
+  const storage = getStorage(icon.provider, icon.prefix);
+  return addIconToStorage(storage, icon.name, data);
 }
 function addCollection(data, provider) {
   if (typeof data !== "object") {
@@ -1519,17 +1250,21 @@ function addCollection(data, provider) {
   })) {
     return false;
   }
-  const storage2 = getStorage(provider, prefix);
-  return !!addIconSet(storage2, data);
+  const storage = getStorage(provider, prefix);
+  return !!addIconSet(storage, data);
 }
+
 const defaultIconSizeCustomisations = Object.freeze({
   width: null,
   height: null
 });
 const defaultIconCustomisations = Object.freeze({
+  // Dimensions
   ...defaultIconSizeCustomisations,
+  // Transformations
   ...defaultIconTransformations
 });
+
 const unitsSplit = /(-?[0-9.]*[0-9]+[0-9.]*)/g;
 const unitsTest = /^-?[0-9.]*[0-9]+[0-9.]*$/g;
 function calculateSize(size, ratio, precision) {
@@ -1568,6 +1303,7 @@ function calculateSize(size, ratio, precision) {
     isNumber = !isNumber;
   }
 }
+
 const isUnsetKeyword = (value) => value === "unset" || value === "undefined" || value === "none";
 function iconToSVG(icon, customisations) {
   const fullIcon = {
@@ -1594,12 +1330,16 @@ function iconToSVG(icon, customisations) {
       if (vFlip) {
         rotation += 2;
       } else {
-        transformations.push("translate(" + (box.width + box.left).toString() + " " + (0 - box.top).toString() + ")");
+        transformations.push(
+          "translate(" + (box.width + box.left).toString() + " " + (0 - box.top).toString() + ")"
+        );
         transformations.push("scale(-1 1)");
         box.top = box.left = 0;
       }
     } else if (vFlip) {
-      transformations.push("translate(" + (0 - box.left).toString() + " " + (box.height + box.top).toString() + ")");
+      transformations.push(
+        "translate(" + (0 - box.left).toString() + " " + (box.height + box.top).toString() + ")"
+      );
       transformations.push("scale(1 -1)");
       box.top = box.left = 0;
     }
@@ -1611,14 +1351,20 @@ function iconToSVG(icon, customisations) {
     switch (rotation) {
       case 1:
         tempValue = box.height / 2 + box.top;
-        transformations.unshift("rotate(90 " + tempValue.toString() + " " + tempValue.toString() + ")");
+        transformations.unshift(
+          "rotate(90 " + tempValue.toString() + " " + tempValue.toString() + ")"
+        );
         break;
       case 2:
-        transformations.unshift("rotate(180 " + (box.width / 2 + box.left).toString() + " " + (box.height / 2 + box.top).toString() + ")");
+        transformations.unshift(
+          "rotate(180 " + (box.width / 2 + box.left).toString() + " " + (box.height / 2 + box.top).toString() + ")"
+        );
         break;
       case 3:
         tempValue = box.width / 2 + box.left;
-        transformations.unshift("rotate(-90 " + tempValue.toString() + " " + tempValue.toString() + ")");
+        transformations.unshift(
+          "rotate(-90 " + tempValue.toString() + " " + tempValue.toString() + ")"
+        );
         break;
     }
     if (rotation % 2 === 1) {
@@ -1664,6 +1410,7 @@ function iconToSVG(icon, customisations) {
     body
   };
 }
+
 const regex = /\sid="(\S+)"/g;
 const randomPrefix = "IconifyId" + Date.now().toString(16) + (Math.random() * 16777216 | 0).toString(16);
 let counter = 0;
@@ -1680,11 +1427,17 @@ function replaceIDs(body, prefix = randomPrefix) {
   ids.forEach((id) => {
     const newID = typeof prefix === "function" ? prefix(id) : prefix + (counter++).toString();
     const escapedID = id.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    body = body.replace(new RegExp('([#;"])(' + escapedID + ')([")]|\\.[a-z])', "g"), "$1" + newID + suffix + "$3");
+    body = body.replace(
+      // Allowed characters before id: [#;"]
+      // Allowed characters after id: [)"], .[a-z]
+      new RegExp('([#;"])(' + escapedID + ')([")]|\\.[a-z])', "g"),
+      "$1" + newID + suffix + "$3"
+    );
   });
   body = body.replace(new RegExp(suffix, "g"), "");
   return body;
 }
+
 const storage = /* @__PURE__ */ Object.create(null);
 function setAPIModule(provider, item) {
   storage[provider] = item;
@@ -1692,6 +1445,7 @@ function setAPIModule(provider, item) {
 function getAPIModule(provider) {
   return storage[provider] || storage[""];
 }
+
 function createAPIConfig(source) {
   let resources;
   if (typeof source.resources === "string") {
@@ -1703,13 +1457,21 @@ function createAPIConfig(source) {
     }
   }
   const result = {
+    // API hosts
     resources,
+    // Root path
     path: source.path || "/",
+    // URL length limit
     maxURL: source.maxURL || 500,
+    // Timeout before next host is used.
     rotate: source.rotate || 750,
+    // Timeout before failing query.
     timeout: source.timeout || 5e3,
+    // Randomise default API end point.
     random: source.random === true,
+    // Start index
     index: source.index || 0,
+    // Receive data after time out (used if time out kicks in first, then API module sends data anyway).
     dataAfterTimeout: source.dataAfterTimeout !== false
   };
   return result;
@@ -1745,6 +1507,7 @@ function addAPIProvider(provider, customConfig) {
 function getAPIConfig(provider) {
   return configStorage[provider];
 }
+
 const detectFetch = () => {
   let callback;
   try {
@@ -1874,13 +1637,14 @@ const fetchAPIModule = {
   prepare,
   send
 };
+
 function sortIcons(icons) {
   const result = {
     loaded: [],
     missing: [],
     pending: []
   };
-  const storage2 = /* @__PURE__ */ Object.create(null);
+  const storage = /* @__PURE__ */ Object.create(null);
   icons.sort((a, b) => {
     if (a.provider !== b.provider) {
       return a.provider.localeCompare(b.provider);
@@ -1903,7 +1667,7 @@ function sortIcons(icons) {
     const provider = icon.provider;
     const prefix = icon.prefix;
     const name = icon.name;
-    const providerStorage = storage2[provider] || (storage2[provider] = /* @__PURE__ */ Object.create(null));
+    const providerStorage = storage[provider] || (storage[provider] = /* @__PURE__ */ Object.create(null));
     const localStorage = providerStorage[prefix] || (providerStorage[prefix] = getStorage(provider, prefix));
     let list;
     if (name in localStorage.icons) {
@@ -1922,26 +1686,27 @@ function sortIcons(icons) {
   });
   return result;
 }
+
 function removeCallback(storages, id) {
-  storages.forEach((storage2) => {
-    const items = storage2.loaderCallbacks;
+  storages.forEach((storage) => {
+    const items = storage.loaderCallbacks;
     if (items) {
-      storage2.loaderCallbacks = items.filter((row) => row.id !== id);
+      storage.loaderCallbacks = items.filter((row) => row.id !== id);
     }
   });
 }
-function updateCallbacks(storage2) {
-  if (!storage2.pendingCallbacksFlag) {
-    storage2.pendingCallbacksFlag = true;
+function updateCallbacks(storage) {
+  if (!storage.pendingCallbacksFlag) {
+    storage.pendingCallbacksFlag = true;
     setTimeout(() => {
-      storage2.pendingCallbacksFlag = false;
-      const items = storage2.loaderCallbacks ? storage2.loaderCallbacks.slice(0) : [];
+      storage.pendingCallbacksFlag = false;
+      const items = storage.loaderCallbacks ? storage.loaderCallbacks.slice(0) : [];
       if (!items.length) {
         return;
       }
       let hasPending = false;
-      const provider = storage2.provider;
-      const prefix = storage2.prefix;
+      const provider = storage.provider;
+      const prefix = storage.prefix;
       items.forEach((item) => {
         const icons = item.icons;
         const oldLength = icons.pending.length;
@@ -1950,13 +1715,13 @@ function updateCallbacks(storage2) {
             return true;
           }
           const name = icon.name;
-          if (storage2.icons[name]) {
+          if (storage.icons[name]) {
             icons.loaded.push({
               provider,
               prefix,
               name
             });
-          } else if (storage2.missing.has(name)) {
+          } else if (storage.missing.has(name)) {
             icons.missing.push({
               provider,
               prefix,
@@ -1970,9 +1735,14 @@ function updateCallbacks(storage2) {
         });
         if (icons.pending.length !== oldLength) {
           if (!hasPending) {
-            removeCallback([storage2], item.id);
+            removeCallback([storage], item.id);
           }
-          item.callback(icons.loaded.slice(0), icons.missing.slice(0), icons.pending.slice(0), item.abort);
+          item.callback(
+            icons.loaded.slice(0),
+            icons.missing.slice(0),
+            icons.pending.slice(0),
+            item.abort
+          );
         }
       });
     });
@@ -1991,21 +1761,24 @@ function storeCallback(callback, icons, pendingSources) {
     callback,
     abort
   };
-  pendingSources.forEach((storage2) => {
-    (storage2.loaderCallbacks || (storage2.loaderCallbacks = [])).push(item);
+  pendingSources.forEach((storage) => {
+    (storage.loaderCallbacks || (storage.loaderCallbacks = [])).push(item);
   });
   return abort;
 }
-function listToIcons(list, validate = true, simpleNames2 = false) {
+
+function listToIcons(list, validate = true, simpleNames = false) {
   const result = [];
   list.forEach((item) => {
-    const icon = typeof item === "string" ? stringToIcon(item, validate, simpleNames2) : item;
+    const icon = typeof item === "string" ? stringToIcon(item, validate, simpleNames) : item;
     if (icon) {
       result.push(icon);
     }
   });
   return result;
 }
+
+// src/config.ts
 var defaultConfig = {
   resources: [],
   index: 0,
@@ -2014,6 +1787,8 @@ var defaultConfig = {
   random: false,
   dataAfterTimeout: false
 };
+
+// src/query.ts
 function sendQuery(config, payload, query, done) {
   const resourcesCount = config.resources.length;
   const startIndex = config.random ? Math.floor(Math.random() * resourcesCount) : config.index;
@@ -2169,6 +1944,8 @@ function sendQuery(config, payload, query, done) {
   setTimeout(execNext);
   return getQueryStatus;
 }
+
+// src/index.ts
 function initRedundancy(cfg) {
   const config = {
     ...defaultConfig,
@@ -2179,12 +1956,17 @@ function initRedundancy(cfg) {
     queries = queries.filter((item) => item().status === "pending");
   }
   function query(payload, queryCallback, doneCallback) {
-    const query2 = sendQuery(config, payload, queryCallback, (data, error) => {
-      cleanup();
-      if (doneCallback) {
-        doneCallback(data, error);
+    const query2 = sendQuery(
+      config,
+      payload,
+      queryCallback,
+      (data, error) => {
+        cleanup();
+        if (doneCallback) {
+          doneCallback(data, error);
+        }
       }
-    });
+    );
     queries.push(query2);
     return query2;
   }
@@ -2204,6 +1986,7 @@ function initRedundancy(cfg) {
   };
   return instance;
 }
+
 function emptyCallback$1() {
 }
 const redundancyCache = /* @__PURE__ */ Object.create(null);
@@ -2224,14 +2007,14 @@ function getRedundancyCache(provider) {
 }
 function sendAPIQuery(target, query, callback) {
   let redundancy;
-  let send2;
+  let send;
   if (typeof target === "string") {
     const api = getAPIModule(target);
     if (!api) {
       callback(void 0, 424);
       return emptyCallback$1;
     }
-    send2 = api.send;
+    send = api.send;
     const cached = getRedundancyCache(target);
     if (cached) {
       redundancy = cached.redundancy;
@@ -2243,22 +2026,24 @@ function sendAPIQuery(target, query, callback) {
       const moduleKey = target.resources ? target.resources[0] : "";
       const api = getAPIModule(moduleKey);
       if (api) {
-        send2 = api.send;
+        send = api.send;
       }
     }
   }
-  if (!redundancy || !send2) {
+  if (!redundancy || !send) {
     callback(void 0, 424);
     return emptyCallback$1;
   }
-  return redundancy.query(query, send2, callback)().abort;
+  return redundancy.query(query, send, callback)().abort;
 }
+
 const browserCacheVersion = "iconify2";
 const browserCachePrefix = "iconify";
 const browserCacheCountKey = browserCachePrefix + "-count";
 const browserCacheVersionKey = browserCachePrefix + "-version";
 const browserStorageHour = 36e5;
 const browserStorageCacheExpiration = 168;
+
 function getStoredItem(func, key) {
   try {
     return func.getItem(key);
@@ -2278,12 +2063,14 @@ function removeStoredItem(func, key) {
   } catch (err) {
   }
 }
-function setBrowserStorageItemsCount(storage2, value) {
-  return setStoredItem(storage2, browserCacheCountKey, value.toString());
+
+function setBrowserStorageItemsCount(storage, value) {
+  return setStoredItem(storage, browserCacheCountKey, value.toString());
 }
-function getBrowserStorageItemsCount(storage2) {
-  return parseInt(getStoredItem(storage2, browserCacheCountKey)) || 0;
+function getBrowserStorageItemsCount(storage) {
+  return parseInt(getStoredItem(storage, browserCacheCountKey)) || 0;
 }
+
 const browserStorageConfig = {
   local: true,
   session: true
@@ -2296,6 +2083,7 @@ let browserStorageStatus = false;
 function setBrowserStorageStatus(status) {
   browserStorageStatus = status;
 }
+
 let _window = typeof window === "undefined" ? {} : window;
 function getBrowserStorage(key) {
   const attr = key + "Storage";
@@ -2307,6 +2095,7 @@ function getBrowserStorage(key) {
   }
   browserStorageConfig[key] = false;
 }
+
 function iterateBrowserStorage(key, callback) {
   const func = getBrowserStorage(key);
   if (!func) {
@@ -2333,7 +2122,8 @@ function iterateBrowserStorage(key, callback) {
     }
     try {
       const data = JSON.parse(item);
-      if (typeof data === "object" && typeof data.cached === "number" && data.cached > minTime && typeof data.provider === "string" && typeof data.data === "object" && typeof data.data.prefix === "string" && callback(data, index)) {
+      if (typeof data === "object" && typeof data.cached === "number" && data.cached > minTime && typeof data.provider === "string" && typeof data.data === "object" && typeof data.data.prefix === "string" && // Valid item: run callback
+      callback(data, index)) {
         return true;
       }
     } catch (err) {
@@ -2352,6 +2142,7 @@ function iterateBrowserStorage(key, callback) {
     }
   }
 }
+
 function initBrowserStorage() {
   if (browserStorageStatus) {
     return;
@@ -2362,33 +2153,40 @@ function initBrowserStorage() {
       const iconSet = item.data;
       const provider = item.provider;
       const prefix = iconSet.prefix;
-      const storage2 = getStorage(provider, prefix);
-      if (!addIconSet(storage2, iconSet).length) {
+      const storage = getStorage(
+        provider,
+        prefix
+      );
+      if (!addIconSet(storage, iconSet).length) {
         return false;
       }
       const lastModified = iconSet.lastModified || -1;
-      storage2.lastModifiedCached = storage2.lastModifiedCached ? Math.min(storage2.lastModifiedCached, lastModified) : lastModified;
+      storage.lastModifiedCached = storage.lastModifiedCached ? Math.min(storage.lastModifiedCached, lastModified) : lastModified;
       return true;
     });
   }
 }
-function updateLastModified(storage2, lastModified) {
-  const lastValue = storage2.lastModifiedCached;
-  if (lastValue && lastValue >= lastModified) {
+
+function updateLastModified(storage, lastModified) {
+  const lastValue = storage.lastModifiedCached;
+  if (
+    // Matches or newer
+    lastValue && lastValue >= lastModified
+  ) {
     return lastValue === lastModified;
   }
-  storage2.lastModifiedCached = lastModified;
+  storage.lastModifiedCached = lastModified;
   if (lastValue) {
     for (const key in browserStorageConfig) {
       iterateBrowserStorage(key, (item) => {
         const iconSet = item.data;
-        return item.provider !== storage2.provider || iconSet.prefix !== storage2.prefix || iconSet.lastModified === lastModified;
+        return item.provider !== storage.provider || iconSet.prefix !== storage.prefix || iconSet.lastModified === lastModified;
       });
     }
   }
   return true;
 }
-function storeInBrowserStorage(storage2, data) {
+function storeInBrowserStorage(storage, data) {
   if (!browserStorageStatus) {
     initBrowserStorage();
   }
@@ -2409,12 +2207,16 @@ function storeInBrowserStorage(storage2, data) {
     }
     const item = {
       cached: Math.floor(Date.now() / browserStorageHour),
-      provider: storage2.provider,
+      provider: storage.provider,
       data
     };
-    return setStoredItem(func, browserCachePrefix + index.toString(), JSON.stringify(item));
+    return setStoredItem(
+      func,
+      browserCachePrefix + index.toString(),
+      JSON.stringify(item)
+    );
   }
-  if (data.lastModified && !updateLastModified(storage2, data.lastModified)) {
+  if (data.lastModified && !updateLastModified(storage, data.lastModified)) {
     return;
   }
   if (!Object.keys(data.icons).length) {
@@ -2428,30 +2230,31 @@ function storeInBrowserStorage(storage2, data) {
     store("session");
   }
 }
+
 function emptyCallback() {
 }
-function loadedNewIcons(storage2) {
-  if (!storage2.iconsLoaderFlag) {
-    storage2.iconsLoaderFlag = true;
+function loadedNewIcons(storage) {
+  if (!storage.iconsLoaderFlag) {
+    storage.iconsLoaderFlag = true;
     setTimeout(() => {
-      storage2.iconsLoaderFlag = false;
-      updateCallbacks(storage2);
+      storage.iconsLoaderFlag = false;
+      updateCallbacks(storage);
     });
   }
 }
-function loadNewIcons(storage2, icons) {
-  if (!storage2.iconsToLoad) {
-    storage2.iconsToLoad = icons;
+function loadNewIcons(storage, icons) {
+  if (!storage.iconsToLoad) {
+    storage.iconsToLoad = icons;
   } else {
-    storage2.iconsToLoad = storage2.iconsToLoad.concat(icons).sort();
+    storage.iconsToLoad = storage.iconsToLoad.concat(icons).sort();
   }
-  if (!storage2.iconsQueueFlag) {
-    storage2.iconsQueueFlag = true;
+  if (!storage.iconsQueueFlag) {
+    storage.iconsQueueFlag = true;
     setTimeout(() => {
-      storage2.iconsQueueFlag = false;
-      const {provider, prefix} = storage2;
-      const icons2 = storage2.iconsToLoad;
-      delete storage2.iconsToLoad;
+      storage.iconsQueueFlag = false;
+      const { provider, prefix } = storage;
+      const icons2 = storage.iconsToLoad;
+      delete storage.iconsToLoad;
       let api;
       if (!icons2 || !(api = getAPIModule(provider))) {
         return;
@@ -2461,26 +2264,29 @@ function loadNewIcons(storage2, icons) {
         sendAPIQuery(provider, item, (data) => {
           if (typeof data !== "object") {
             item.icons.forEach((name) => {
-              storage2.missing.add(name);
+              storage.missing.add(name);
             });
           } else {
             try {
-              const parsed = addIconSet(storage2, data);
+              const parsed = addIconSet(
+                storage,
+                data
+              );
               if (!parsed.length) {
                 return;
               }
-              const pending = storage2.pendingIcons;
+              const pending = storage.pendingIcons;
               if (pending) {
                 parsed.forEach((name) => {
                   pending.delete(name);
                 });
               }
-              storeInBrowserStorage(storage2, data);
+              storeInBrowserStorage(storage, data);
             } catch (err) {
               console.error(err);
             }
           }
-          loadedNewIcons(storage2);
+          loadedNewIcons(storage);
         });
       });
     });
@@ -2494,7 +2300,12 @@ const loadIcons = (icons, callback) => {
     if (callback) {
       setTimeout(() => {
         if (callCallback) {
-          callback(sortedIcons.loaded, sortedIcons.missing, sortedIcons.pending, emptyCallback);
+          callback(
+            sortedIcons.loaded,
+            sortedIcons.missing,
+            sortedIcons.pending,
+            emptyCallback
+          );
         }
       });
     }
@@ -2506,7 +2317,7 @@ const loadIcons = (icons, callback) => {
   const sources = [];
   let lastProvider, lastPrefix;
   sortedIcons.pending.forEach((icon) => {
-    const {provider, prefix} = icon;
+    const { provider, prefix } = icon;
     if (prefix === lastPrefix && provider === lastProvider) {
       return;
     }
@@ -2519,22 +2330,23 @@ const loadIcons = (icons, callback) => {
     }
   });
   sortedIcons.pending.forEach((icon) => {
-    const {provider, prefix, name} = icon;
-    const storage2 = getStorage(provider, prefix);
-    const pendingQueue = storage2.pendingIcons || (storage2.pendingIcons = /* @__PURE__ */ new Set());
+    const { provider, prefix, name } = icon;
+    const storage = getStorage(provider, prefix);
+    const pendingQueue = storage.pendingIcons || (storage.pendingIcons = /* @__PURE__ */ new Set());
     if (!pendingQueue.has(name)) {
       pendingQueue.add(name);
       newIcons[provider][prefix].push(name);
     }
   });
-  sources.forEach((storage2) => {
-    const {provider, prefix} = storage2;
+  sources.forEach((storage) => {
+    const { provider, prefix } = storage;
     if (newIcons[provider][prefix].length) {
-      loadNewIcons(storage2, newIcons[provider][prefix]);
+      loadNewIcons(storage, newIcons[provider][prefix]);
     }
   });
   return callback ? storeCallback(callback, sortedIcons, sources) : emptyCallback;
 };
+
 function mergeCustomisations(defaults, item) {
   const result = {
     ...defaults
@@ -2552,6 +2364,7 @@ function mergeCustomisations(defaults, item) {
   }
   return result;
 }
+
 const separator = /[\s,]+/;
 function flipFromString(custom, flip) {
   flip.split(separator).forEach((str) => {
@@ -2566,6 +2379,7 @@ function flipFromString(custom, flip) {
     }
   });
 }
+
 function rotateFromString(value, defaultValue = 0) {
   const units = value.replace(/^-?[0-9.]*/, "");
   function cleanup(value2) {
@@ -2597,6 +2411,7 @@ function rotateFromString(value, defaultValue = 0) {
   }
   return defaultValue;
 }
+
 function iconToHTML(body, attributes) {
   let renderAttribsHTML = body.indexOf("xlink:") === -1 ? "" : ' xmlns:xlink="http://www.w3.org/1999/xlink"';
   for (const attr in attributes) {
@@ -2604,6 +2419,7 @@ function iconToHTML(body, attributes) {
   }
   return '<svg xmlns="http://www.w3.org/2000/svg"' + renderAttribsHTML + ">" + body + "</svg>";
 }
+
 function encodeSVGforURL(svg) {
   return svg.replace(/"/g, "'").replace(/%/g, "%25").replace(/#/g, "%23").replace(/</g, "%3C").replace(/>/g, "%3E").replace(/\s+/g, " ");
 }
@@ -2613,242 +2429,336 @@ function svgToData(svg) {
 function svgToURL(svg) {
   return 'url("' + svgToData(svg) + '")';
 }
+
 const defaultExtendedIconCustomisations = {
-  ...defaultIconCustomisations,
-  inline: false
+    ...defaultIconCustomisations,
+    inline: false,
 };
+
+/**
+ * Default SVG attributes
+ */
 const svgDefaults = {
-  xmlns: "http://www.w3.org/2000/svg",
-  "xmlns:xlink": "http://www.w3.org/1999/xlink",
-  "aria-hidden": true,
-  role: "img"
+    'xmlns': 'http://www.w3.org/2000/svg',
+    'xmlns:xlink': 'http://www.w3.org/1999/xlink',
+    'aria-hidden': true,
+    'role': 'img',
 };
+/**
+ * Style modes
+ */
 const commonProps = {
-  display: "inline-block"
+    display: 'inline-block',
 };
 const monotoneProps = {
-  "background-color": "currentColor"
+    'background-color': 'currentColor',
 };
 const coloredProps = {
-  "background-color": "transparent"
+    'background-color': 'transparent',
 };
+// Dynamically add common props to variables above
 const propsToAdd = {
-  image: "var(--svg)",
-  repeat: "no-repeat",
-  size: "100% 100%"
+    image: 'var(--svg)',
+    repeat: 'no-repeat',
+    size: '100% 100%',
 };
 const propsToAddTo = {
-  "-webkit-mask": monotoneProps,
-  mask: monotoneProps,
-  background: coloredProps
+    '-webkit-mask': monotoneProps,
+    'mask': monotoneProps,
+    'background': coloredProps,
 };
 for (const prefix in propsToAddTo) {
-  const list = propsToAddTo[prefix];
-  for (const prop in propsToAdd) {
-    list[prefix + "-" + prop] = propsToAdd[prop];
-  }
+    const list = propsToAddTo[prefix];
+    for (const prop in propsToAdd) {
+        list[prefix + '-' + prop] = propsToAdd[prop];
+    }
 }
+/**
+ * Fix size: add 'px' to numbers
+ */
 function fixSize(value) {
-  return value + (value.match(/^[-0-9.]+$/) ? "px" : "");
+    return value + (value.match(/^[-0-9.]+$/) ? 'px' : '');
 }
-function render(icon, props) {
-  const customisations = mergeCustomisations(defaultExtendedIconCustomisations, props);
-  const mode = props.mode || "svg";
-  const componentProps = mode === "svg" ? {...svgDefaults} : {};
-  if (icon.body.indexOf("xlink:") === -1) {
-    delete componentProps["xmlns:xlink"];
-  }
-  let style = typeof props.style === "string" ? props.style : "";
-  for (let key in props) {
-    const value = props[key];
-    if (value === void 0) {
-      continue;
+/**
+ * Generate icon from properties
+ */
+function render(
+// Icon must be validated before calling this function
+icon, 
+// Properties
+props) {
+    const customisations = mergeCustomisations(defaultExtendedIconCustomisations, props);
+    // Check mode
+    const mode = props.mode || 'svg';
+    const componentProps = (mode === 'svg' ? { ...svgDefaults } : {});
+    if (icon.body.indexOf('xlink:') === -1) {
+        delete componentProps['xmlns:xlink'];
     }
-    switch (key) {
-      case "icon":
-      case "style":
-      case "onLoad":
-      case "mode":
-        break;
-      case "inline":
-      case "hFlip":
-      case "vFlip":
-        customisations[key] = value === true || value === "true" || value === 1;
-        break;
-      case "flip":
-        if (typeof value === "string") {
-          flipFromString(customisations, value);
-        }
-        break;
-      case "color":
-        style = style + (style.length > 0 && style.trim().slice(-1) !== ";" ? ";" : "") + "color: " + value + "; ";
-        break;
-      case "rotate":
-        if (typeof value === "string") {
-          customisations[key] = rotateFromString(value);
-        } else if (typeof value === "number") {
-          customisations[key] = value;
-        }
-        break;
-      case "ariaHidden":
-      case "aria-hidden":
-        if (value !== true && value !== "true") {
-          delete componentProps["aria-hidden"];
-        }
-        break;
-      default:
-        if (key.slice(0, 3) === "on:") {
-          break;
-        }
-        if (defaultExtendedIconCustomisations[key] === void 0) {
-          componentProps[key] = value;
-        }
-    }
-  }
-  const item = iconToSVG(icon, customisations);
-  const renderAttribs = item.attributes;
-  if (customisations.inline) {
-    style = "vertical-align: -0.125em; " + style;
-  }
-  if (mode === "svg") {
-    Object.assign(componentProps, renderAttribs);
-    if (style !== "") {
-      componentProps.style = style;
-    }
-    let localCounter = 0;
-    let id = props.id;
-    if (typeof id === "string") {
-      id = id.replace(/-/g, "_");
-    }
-    return {
-      svg: true,
-      attributes: componentProps,
-      body: replaceIDs(item.body, id ? () => id + "ID" + localCounter++ : "iconifySvelte")
-    };
-  }
-  const {body, width, height} = icon;
-  const useMask = mode === "mask" || (mode === "bg" ? false : body.indexOf("currentColor") !== -1);
-  const html = iconToHTML(body, {
-    ...renderAttribs,
-    width: width + "",
-    height: height + ""
-  });
-  const url = svgToURL(html);
-  const styles = {
-    "--svg": url
-  };
-  const size = (prop) => {
-    const value = renderAttribs[prop];
-    if (value) {
-      styles[prop] = fixSize(value);
-    }
-  };
-  size("width");
-  size("height");
-  Object.assign(styles, commonProps, useMask ? monotoneProps : coloredProps);
-  let customStyle = "";
-  for (const key in styles) {
-    customStyle += key + ": " + styles[key] + ";";
-  }
-  componentProps.style = customStyle + style;
-  return {
-    svg: false,
-    attributes: componentProps
-  };
-}
-allowSimpleNames(true);
-setAPIModule("", fetchAPIModule);
-if (typeof document !== "undefined" && typeof window !== "undefined") {
-  initBrowserStorage();
-  const _window2 = window;
-  if (_window2.IconifyPreload !== void 0) {
-    const preload = _window2.IconifyPreload;
-    const err = "Invalid IconifyPreload syntax.";
-    if (typeof preload === "object" && preload !== null) {
-      (preload instanceof Array ? preload : [preload]).forEach((item) => {
-        try {
-          if (typeof item !== "object" || item === null || item instanceof Array || typeof item.icons !== "object" || typeof item.prefix !== "string" || !addCollection(item)) {
-            console.error(err);
-          }
-        } catch (e) {
-          console.error(err);
-        }
-      });
-    }
-  }
-  if (_window2.IconifyProviders !== void 0) {
-    const providers = _window2.IconifyProviders;
-    if (typeof providers === "object" && providers !== null) {
-      for (let key in providers) {
-        const err = "IconifyProviders[" + key + "] is invalid.";
-        try {
-          const value = providers[key];
-          if (typeof value !== "object" || !value || value.resources === void 0) {
+    // Create style if missing
+    let style = typeof props.style === 'string' ? props.style : '';
+    // Get element properties
+    for (let key in props) {
+        const value = props[key];
+        if (value === void 0) {
             continue;
-          }
-          if (!addAPIProvider(key, value)) {
-            console.error(err);
-          }
-        } catch (e) {
-          console.error(err);
         }
-      }
+        switch (key) {
+            // Properties to ignore
+            case 'icon':
+            case 'style':
+            case 'onLoad':
+            case 'mode':
+                break;
+            // Boolean attributes
+            case 'inline':
+            case 'hFlip':
+            case 'vFlip':
+                customisations[key] =
+                    value === true || value === 'true' || value === 1;
+                break;
+            // Flip as string: 'horizontal,vertical'
+            case 'flip':
+                if (typeof value === 'string') {
+                    flipFromString(customisations, value);
+                }
+                break;
+            // Color: copy to style, add extra ';' in case style is missing it
+            case 'color':
+                style =
+                    style +
+                        (style.length > 0 && style.trim().slice(-1) !== ';'
+                            ? ';'
+                            : '') +
+                        'color: ' +
+                        value +
+                        '; ';
+                break;
+            // Rotation as string
+            case 'rotate':
+                if (typeof value === 'string') {
+                    customisations[key] = rotateFromString(value);
+                }
+                else if (typeof value === 'number') {
+                    customisations[key] = value;
+                }
+                break;
+            // Remove aria-hidden
+            case 'ariaHidden':
+            case 'aria-hidden':
+                if (value !== true && value !== 'true') {
+                    delete componentProps['aria-hidden'];
+                }
+                break;
+            default:
+                if (key.slice(0, 3) === 'on:') {
+                    // Svelte event
+                    break;
+                }
+                // Copy missing property if it does not exist in customisations
+                if (defaultExtendedIconCustomisations[key] === void 0) {
+                    componentProps[key] = value;
+                }
+        }
     }
-  }
+    // Generate icon
+    const item = iconToSVG(icon, customisations);
+    const renderAttribs = item.attributes;
+    // Inline display
+    if (customisations.inline) {
+        // Style overrides it
+        style = 'vertical-align: -0.125em; ' + style;
+    }
+    if (mode === 'svg') {
+        // Add icon stuff
+        Object.assign(componentProps, renderAttribs);
+        // Style
+        if (style !== '') {
+            componentProps.style = style;
+        }
+        // Counter for ids based on "id" property to render icons consistently on server and client
+        let localCounter = 0;
+        let id = props.id;
+        if (typeof id === 'string') {
+            // Convert '-' to '_' to avoid errors in animations
+            id = id.replace(/-/g, '_');
+        }
+        // Generate HTML
+        return {
+            svg: true,
+            attributes: componentProps,
+            body: replaceIDs(item.body, id ? () => id + 'ID' + localCounter++ : 'iconifySvelte'),
+        };
+    }
+    // Render <span> with style
+    const { body, width, height } = icon;
+    const useMask = mode === 'mask' ||
+        (mode === 'bg' ? false : body.indexOf('currentColor') !== -1);
+    // Generate SVG
+    const html = iconToHTML(body, {
+        ...renderAttribs,
+        width: width + '',
+        height: height + '',
+    });
+    // Generate style
+    const url = svgToURL(html);
+    const styles = {
+        '--svg': url,
+    };
+    const size = (prop) => {
+        const value = renderAttribs[prop];
+        if (value) {
+            styles[prop] = fixSize(value);
+        }
+    };
+    size('width');
+    size('height');
+    Object.assign(styles, commonProps, useMask ? monotoneProps : coloredProps);
+    let customStyle = '';
+    for (const key in styles) {
+        customStyle += key + ': ' + styles[key] + ';';
+    }
+    componentProps.style = customStyle + style;
+    return {
+        svg: false,
+        attributes: componentProps,
+    };
 }
+/**
+ * Initialise stuff
+ */
+// Enable short names
+allowSimpleNames(true);
+// Set API module
+setAPIModule('', fetchAPIModule);
+/**
+ * Browser stuff
+ */
+if (typeof document !== 'undefined' && typeof window !== 'undefined') {
+    // Set cache and load existing cache
+    initBrowserStorage();
+    const _window = window;
+    // Load icons from global "IconifyPreload"
+    if (_window.IconifyPreload !== void 0) {
+        const preload = _window.IconifyPreload;
+        const err = 'Invalid IconifyPreload syntax.';
+        if (typeof preload === 'object' && preload !== null) {
+            (preload instanceof Array ? preload : [preload]).forEach((item) => {
+                try {
+                    if (
+                    // Check if item is an object and not null/array
+                    typeof item !== 'object' ||
+                        item === null ||
+                        item instanceof Array ||
+                        // Check for 'icons' and 'prefix'
+                        typeof item.icons !== 'object' ||
+                        typeof item.prefix !== 'string' ||
+                        // Add icon set
+                        !addCollection(item)) {
+                        console.error(err);
+                    }
+                }
+                catch (e) {
+                    console.error(err);
+                }
+            });
+        }
+    }
+    // Set API from global "IconifyProviders"
+    if (_window.IconifyProviders !== void 0) {
+        const providers = _window.IconifyProviders;
+        if (typeof providers === 'object' && providers !== null) {
+            for (let key in providers) {
+                const err = 'IconifyProviders[' + key + '] is invalid.';
+                try {
+                    const value = providers[key];
+                    if (typeof value !== 'object' ||
+                        !value ||
+                        value.resources === void 0) {
+                        continue;
+                    }
+                    if (!addAPIProvider(key, value)) {
+                        console.error(err);
+                    }
+                }
+                catch (e) {
+                    console.error(err);
+                }
+            }
+        }
+    }
+}
+/**
+ * Check if component needs to be updated
+ */
 function checkIconState(icon, state, mounted, callback, onload) {
-  function abortLoading() {
-    if (state.loading) {
-      state.loading.abort();
-      state.loading = null;
+    // Abort loading icon
+    function abortLoading() {
+        if (state.loading) {
+            state.loading.abort();
+            state.loading = null;
+        }
     }
-  }
-  if (typeof icon === "object" && icon !== null && typeof icon.body === "string") {
-    state.name = "";
+    // Icon is an object
+    if (typeof icon === 'object' &&
+        icon !== null &&
+        typeof icon.body === 'string') {
+        // Stop loading
+        state.name = '';
+        abortLoading();
+        return { data: { ...defaultIconProps, ...icon } };
+    }
+    // Invalid icon?
+    let iconName;
+    if (typeof icon !== 'string' ||
+        (iconName = stringToIcon(icon, false, true)) === null) {
+        abortLoading();
+        return null;
+    }
+    // Load icon
+    const data = getIconData(iconName);
+    if (!data) {
+        // Icon data is not available
+        // Do not load icon until component is mounted
+        if (mounted && (!state.loading || state.loading.name !== icon)) {
+            // New icon to load
+            abortLoading();
+            state.name = '';
+            state.loading = {
+                name: icon,
+                abort: loadIcons([iconName], callback),
+            };
+        }
+        return null;
+    }
+    // Icon data is available
     abortLoading();
-    return {data: {...defaultIconProps, ...icon}};
-  }
-  let iconName;
-  if (typeof icon !== "string" || (iconName = stringToIcon(icon, false, true)) === null) {
-    abortLoading();
-    return null;
-  }
-  const data = getIconData(iconName);
-  if (!data) {
-    if (mounted && (!state.loading || state.loading.name !== icon)) {
-      abortLoading();
-      state.name = "";
-      state.loading = {
-        name: icon,
-        abort: loadIcons([iconName], callback)
-      };
+    if (state.name !== icon) {
+        state.name = icon;
+        if (onload && !state.destroyed) {
+            onload(icon);
+        }
     }
-    return null;
-  }
-  abortLoading();
-  if (state.name !== icon) {
-    state.name = icon;
-    if (onload && !state.destroyed) {
-      onload(icon);
+    // Add classes
+    const classes = ['iconify'];
+    if (iconName.prefix !== '') {
+        classes.push('iconify--' + iconName.prefix);
     }
-  }
-  const classes = ["iconify"];
-  if (iconName.prefix !== "") {
-    classes.push("iconify--" + iconName.prefix);
-  }
-  if (iconName.provider !== "") {
-    classes.push("iconify--" + iconName.provider);
-  }
-  return {data, classes};
+    if (iconName.provider !== '') {
+        classes.push('iconify--' + iconName.provider);
+    }
+    return { data, classes };
 }
+/**
+ * Generate icon
+ */
 function generateIcon(icon, props) {
-  return icon ? render({
-    ...defaultIconProps,
-    ...icon
-  }, props) : null;
+    return icon
+        ? render({
+            ...defaultIconProps,
+            ...icon,
+        }, props)
+        : null;
 }
-var checkIconState_1 = checkIconState;
-var generateIcon_1 = generateIcon;
 
 /* generated by Svelte v3.59.1 */
 
@@ -2856,8 +2766,8 @@ function create_if_block$1(ctx) {
 	let if_block_anchor;
 
 	function select_block_type(ctx, dirty) {
-		if (/*data*/ ctx[0].svg) return create_if_block_1;
-		return create_else_block;
+		if (/*data*/ ctx[0].svg) return create_if_block_1$1;
+		return create_else_block$1;
 	}
 
 	let current_block_type = select_block_type(ctx);
@@ -2897,7 +2807,7 @@ function create_if_block$1(ctx) {
 }
 
 // (113:1) {:else}
-function create_else_block(ctx) {
+function create_else_block$1(ctx) {
 	let span;
 	let span_levels = [/*data*/ ctx[0].attributes];
 	let span_data = {};
@@ -2932,7 +2842,7 @@ function create_else_block(ctx) {
 }
 
 // (109:1) {#if data.svg}
-function create_if_block_1(ctx) {
+function create_if_block_1$1(ctx) {
 	let svg;
 	let raw_value = /*data*/ ctx[0].body + "";
 	let svg_levels = [/*data*/ ctx[0].attributes];
@@ -3065,9 +2975,9 @@ function instance$1($$self, $$props, $$invalidate) {
 	};
 
 	$$self.$$.update = () => {
-		 {
-			const iconData = checkIconState_1($$props.icon, state, mounted, loaded, onLoad);
-			$$invalidate(0, data = iconData ? generateIcon_1(iconData.data, $$props) : null);
+		{
+			const iconData = checkIconState($$props.icon, state, mounted, loaded, onLoad);
+			$$invalidate(0, data = iconData ? generateIcon(iconData.data, $$props) : null);
 
 			if (data && iconData.classes) {
 				// Add classes
@@ -3086,1602 +2996,583 @@ function instance$1($$self, $$props, $$invalidate) {
 	return [data, state, mounted, counter];
 }
 
-class Component$1 extends SvelteComponent {
+let Component$1 = class Component extends SvelteComponent {
 	constructor(options) {
 		super();
 		init(this, options, instance$1, create_fragment$1, safe_not_equal, {});
 	}
-}
+};
 
 /* generated by Svelte v3.59.1 */
 
-function get_each_context(ctx, list, i) {
-	const child_ctx = ctx.slice();
-	child_ctx[10] = list[i].link;
-	return child_ctx;
+function create_if_block_5(ctx) {
+	let div;
+	let t_value = /*form*/ ctx[0].error_message + "";
+	let t;
+	let div_intro;
+
+	return {
+		c() {
+			div = element("div");
+			t = text(t_value);
+			this.h();
+		},
+		l(nodes) {
+			div = claim_element(nodes, "DIV", { class: true });
+			var div_nodes = children(div);
+			t = claim_text(div_nodes, t_value);
+			div_nodes.forEach(detach);
+			this.h();
+		},
+		h() {
+			attr(div, "class", "message error svelte-16pn5km");
+		},
+		m(target, anchor) {
+			insert_hydration(target, div, anchor);
+			append_hydration(div, t);
+		},
+		p(ctx, dirty) {
+			if (dirty & /*form*/ 1 && t_value !== (t_value = /*form*/ ctx[0].error_message + "")) set_data(t, t_value);
+		},
+		i(local) {
+			if (!div_intro) {
+				add_render_callback(() => {
+					div_intro = create_in_transition(div, fade, {});
+					div_intro.start();
+				});
+			}
+		},
+		o: noop,
+		d(detaching) {
+			if (detaching) detach(div);
+		}
+	};
 }
 
-function get_each_context_1(ctx, list, i) {
-	const child_ctx = ctx.slice();
-	child_ctx[10] = list[i].link;
-	return child_ctx;
-}
-
-// (145:31) 
+// (182:22) 
 function create_if_block_4(ctx) {
-	let img;
-	let img_src_value;
-	let img_alt_value;
-
-	return {
-		c() {
-			img = element("img");
-			this.h();
-		},
-		l(nodes) {
-			img = claim_element(nodes, "IMG", { src: true, alt: true });
-			this.h();
-		},
-		h() {
-			if (!src_url_equal(img.src, img_src_value = /*logo*/ ctx[0].image.url)) attr(img, "src", img_src_value);
-			attr(img, "alt", img_alt_value = /*logo*/ ctx[0].image.alt);
-		},
-		m(target, anchor) {
-			insert_hydration(target, img, anchor);
-		},
-		p(ctx, dirty) {
-			if (dirty & /*logo*/ 1 && !src_url_equal(img.src, img_src_value = /*logo*/ ctx[0].image.url)) {
-				attr(img, "src", img_src_value);
-			}
-
-			if (dirty & /*logo*/ 1 && img_alt_value !== (img_alt_value = /*logo*/ ctx[0].image.alt)) {
-				attr(img, "alt", img_alt_value);
-			}
-		},
-		d(detaching) {
-			if (detaching) detach(img);
-		}
-	};
-}
-
-// (143:6) {#if logo.title}
-function create_if_block_3(ctx) {
-	let t_value = /*logo*/ ctx[0].title + "";
+	let div;
+	let t_value = /*form*/ ctx[0].success_message + "";
 	let t;
+	let div_intro;
 
 	return {
 		c() {
-			t = text(t_value);
-		},
-		l(nodes) {
-			t = claim_text(nodes, t_value);
-		},
-		m(target, anchor) {
-			insert_hydration(target, t, anchor);
-		},
-		p(ctx, dirty) {
-			if (dirty & /*logo*/ 1 && t_value !== (t_value = /*logo*/ ctx[0].title + "")) set_data(t, t_value);
-		},
-		d(detaching) {
-			if (detaching) detach(t);
-		}
-	};
-}
-
-// (150:6) {#each site_nav as { link }}
-function create_each_block_1(ctx) {
-	let a;
-	let t_value = /*link*/ ctx[10].label + "";
-	let t;
-	let a_href_value;
-
-	return {
-		c() {
-			a = element("a");
+			div = element("div");
 			t = text(t_value);
 			this.h();
 		},
 		l(nodes) {
-			a = claim_element(nodes, "A", { class: true, href: true });
-			var a_nodes = children(a);
-			t = claim_text(a_nodes, t_value);
-			a_nodes.forEach(detach);
+			div = claim_element(nodes, "DIV", { class: true });
+			var div_nodes = children(div);
+			t = claim_text(div_nodes, t_value);
+			div_nodes.forEach(detach);
 			this.h();
 		},
 		h() {
-			attr(a, "class", "link svelte-40bdid");
-			attr(a, "href", a_href_value = /*link*/ ctx[10].url);
-			toggle_class(a, "active", /*link*/ ctx[10].url === window.location.pathname);
+			attr(div, "class", "message svelte-16pn5km");
 		},
 		m(target, anchor) {
-			insert_hydration(target, a, anchor);
-			append_hydration(a, t);
+			insert_hydration(target, div, anchor);
+			append_hydration(div, t);
 		},
 		p(ctx, dirty) {
-			if (dirty & /*site_nav*/ 2 && t_value !== (t_value = /*link*/ ctx[10].label + "")) set_data(t, t_value);
-
-			if (dirty & /*site_nav*/ 2 && a_href_value !== (a_href_value = /*link*/ ctx[10].url)) {
-				attr(a, "href", a_href_value);
-			}
-
-			if (dirty & /*site_nav, window*/ 2) {
-				toggle_class(a, "active", /*link*/ ctx[10].url === window.location.pathname);
+			if (dirty & /*form*/ 1 && t_value !== (t_value = /*form*/ ctx[0].success_message + "")) set_data(t, t_value);
+		},
+		i(local) {
+			if (!div_intro) {
+				add_render_callback(() => {
+					div_intro = create_in_transition(div, fade, {});
+					div_intro.start();
+				});
 			}
 		},
+		o: noop,
 		d(detaching) {
-			if (detaching) detach(a);
+			if (detaching) detach(div);
 		}
 	};
 }
 
-// (178:31) 
+// (165:2) {#if !submitted && !error}
 function create_if_block_2(ctx) {
-	let img;
-	let img_src_value;
-	let img_alt_value;
-
-	return {
-		c() {
-			img = element("img");
-			this.h();
-		},
-		l(nodes) {
-			img = claim_element(nodes, "IMG", { src: true, alt: true });
-			this.h();
-		},
-		h() {
-			if (!src_url_equal(img.src, img_src_value = /*logo*/ ctx[0].image.url)) attr(img, "src", img_src_value);
-			attr(img, "alt", img_alt_value = /*logo*/ ctx[0].image.alt);
-		},
-		m(target, anchor) {
-			insert_hydration(target, img, anchor);
-		},
-		p(ctx, dirty) {
-			if (dirty & /*logo*/ 1 && !src_url_equal(img.src, img_src_value = /*logo*/ ctx[0].image.url)) {
-				attr(img, "src", img_src_value);
-			}
-
-			if (dirty & /*logo*/ 1 && img_alt_value !== (img_alt_value = /*logo*/ ctx[0].image.alt)) {
-				attr(img, "alt", img_alt_value);
-			}
-		},
-		d(detaching) {
-			if (detaching) detach(img);
-		}
-	};
-}
-
-// (176:6) {#if logo.title}
-function create_if_block_1$1(ctx) {
-	let t_value = /*logo*/ ctx[0].title + "";
-	let t;
-
-	return {
-		c() {
-			t = text(t_value);
-		},
-		l(nodes) {
-			t = claim_text(nodes, t_value);
-		},
-		m(target, anchor) {
-			insert_hydration(target, t, anchor);
-		},
-		p(ctx, dirty) {
-			if (dirty & /*logo*/ 1 && t_value !== (t_value = /*logo*/ ctx[0].title + "")) set_data(t, t_value);
-		},
-		d(detaching) {
-			if (detaching) detach(t);
-		}
-	};
-}
-
-// (188:4) {#if mobileNavOpen}
-function create_if_block$2(ctx) {
-	let nav;
+	let form_1;
+	let label;
+	let input;
+	let input_placeholder_value;
 	let t;
 	let button;
-	let icon;
-	let nav_transition;
+	let current_block_type_index;
+	let if_block;
 	let current;
 	let mounted;
 	let dispose;
-	let each_value = /*site_nav*/ ctx[1];
-	let each_blocks = [];
+	const if_block_creators = [create_if_block_3, create_else_block];
+	const if_blocks = [];
 
-	for (let i = 0; i < each_value.length; i += 1) {
-		each_blocks[i] = create_each_block(get_each_context(ctx, each_value, i));
+	function select_block_type_1(ctx, dirty) {
+		if (!/*submitting*/ ctx[3]) return 0;
+		return 1;
 	}
 
-	icon = new Component$1({ props: { height: "25", icon: "bi:x-lg" } });
+	current_block_type_index = select_block_type_1(ctx);
+	if_block = if_blocks[current_block_type_index] = if_block_creators[current_block_type_index](ctx);
 
 	return {
 		c() {
-			nav = element("nav");
-
-			for (let i = 0; i < each_blocks.length; i += 1) {
-				each_blocks[i].c();
-			}
-
+			form_1 = element("form");
+			label = element("label");
+			input = element("input");
 			t = space();
 			button = element("button");
-			create_component(icon.$$.fragment);
+			if_block.c();
 			this.h();
 		},
 		l(nodes) {
-			nav = claim_element(nodes, "NAV", { id: true, class: true });
-			var nav_nodes = children(nav);
+			form_1 = claim_element(nodes, "FORM", { class: true });
+			var form_1_nodes = children(form_1);
+			label = claim_element(form_1_nodes, "LABEL", { class: true });
+			var label_nodes = children(label);
 
-			for (let i = 0; i < each_blocks.length; i += 1) {
-				each_blocks[i].l(nav_nodes);
-			}
-
-			t = claim_space(nav_nodes);
-
-			button = claim_element(nav_nodes, "BUTTON", {
-				id: true,
-				"aria-label": true,
+			input = claim_element(label_nodes, "INPUT", {
+				name: true,
+				type: true,
+				placeholder: true,
 				class: true
 			});
 
+			label_nodes.forEach(detach);
+			t = claim_space(form_1_nodes);
+			button = claim_element(form_1_nodes, "BUTTON", { class: true, type: true });
 			var button_nodes = children(button);
-			claim_component(icon.$$.fragment, button_nodes);
+			if_block.l(button_nodes);
 			button_nodes.forEach(detach);
-			nav_nodes.forEach(detach);
+			form_1_nodes.forEach(detach);
 			this.h();
 		},
 		h() {
-			attr(button, "id", "close");
-			attr(button, "aria-label", "Close Navigation");
-			attr(button, "class", "svelte-40bdid");
-			attr(nav, "id", "popup");
-			attr(nav, "class", "svelte-40bdid");
+			input.required = true;
+			attr(input, "name", "email");
+			attr(input, "type", "text");
+			attr(input, "placeholder", input_placeholder_value = /*form*/ ctx[0].placeholder);
+			attr(input, "class", "svelte-16pn5km");
+			attr(label, "class", "svelte-16pn5km");
+			attr(button, "class", "button svelte-16pn5km");
+			attr(button, "type", "submit");
+			attr(form_1, "class", "svelte-16pn5km");
 		},
 		m(target, anchor) {
-			insert_hydration(target, nav, anchor);
-
-			for (let i = 0; i < each_blocks.length; i += 1) {
-				if (each_blocks[i]) {
-					each_blocks[i].m(nav, null);
-				}
-			}
-
-			append_hydration(nav, t);
-			append_hydration(nav, button);
-			mount_component(icon, button, null);
+			insert_hydration(target, form_1, anchor);
+			append_hydration(form_1, label);
+			append_hydration(label, input);
+			append_hydration(form_1, t);
+			append_hydration(form_1, button);
+			if_blocks[current_block_type_index].m(button, null);
 			current = true;
 
 			if (!mounted) {
-				dispose = listen(button, "click", /*click_handler_1*/ ctx[8]);
+				dispose = listen(form_1, "submit", prevent_default(/*submit_form*/ ctx[6]));
 				mounted = true;
 			}
 		},
 		p(ctx, dirty) {
-			if (dirty & /*site_nav*/ 2) {
-				each_value = /*site_nav*/ ctx[1];
-				let i;
-
-				for (i = 0; i < each_value.length; i += 1) {
-					const child_ctx = get_each_context(ctx, each_value, i);
-
-					if (each_blocks[i]) {
-						each_blocks[i].p(child_ctx, dirty);
-					} else {
-						each_blocks[i] = create_each_block(child_ctx);
-						each_blocks[i].c();
-						each_blocks[i].m(nav, t);
-					}
-				}
-
-				for (; i < each_blocks.length; i += 1) {
-					each_blocks[i].d(1);
-				}
-
-				each_blocks.length = each_value.length;
-			}
-		},
-		i(local) {
-			if (current) return;
-			transition_in(icon.$$.fragment, local);
-
-			add_render_callback(() => {
-				if (!current) return;
-				if (!nav_transition) nav_transition = create_bidirectional_transition(nav, fade, { duration: 200 }, true);
-				nav_transition.run(1);
-			});
-
-			current = true;
-		},
-		o(local) {
-			transition_out(icon.$$.fragment, local);
-			if (!nav_transition) nav_transition = create_bidirectional_transition(nav, fade, { duration: 200 }, false);
-			nav_transition.run(0);
-			current = false;
-		},
-		d(detaching) {
-			if (detaching) detach(nav);
-			destroy_each(each_blocks, detaching);
-			destroy_component(icon);
-			if (detaching && nav_transition) nav_transition.end();
-			mounted = false;
-			dispose();
-		}
-	};
-}
-
-// (190:8) {#each site_nav as { link }}
-function create_each_block(ctx) {
-	let a;
-	let t_value = /*link*/ ctx[10].label + "";
-	let t;
-	let a_href_value;
-
-	return {
-		c() {
-			a = element("a");
-			t = text(t_value);
-			this.h();
-		},
-		l(nodes) {
-			a = claim_element(nodes, "A", { href: true });
-			var a_nodes = children(a);
-			t = claim_text(a_nodes, t_value);
-			a_nodes.forEach(detach);
-			this.h();
-		},
-		h() {
-			attr(a, "href", a_href_value = /*link*/ ctx[10].url);
-		},
-		m(target, anchor) {
-			insert_hydration(target, a, anchor);
-			append_hydration(a, t);
-		},
-		p(ctx, dirty) {
-			if (dirty & /*site_nav*/ 2 && t_value !== (t_value = /*link*/ ctx[10].label + "")) set_data(t, t_value);
-
-			if (dirty & /*site_nav*/ 2 && a_href_value !== (a_href_value = /*link*/ ctx[10].url)) {
-				attr(a, "href", a_href_value);
-			}
-		},
-		d(detaching) {
-			if (detaching) detach(a);
-		}
-	};
-}
-
-function create_fragment$2(ctx) {
-	let div3;
-	let header;
-	let div1;
-	let a0;
-	let t0;
-	let nav;
-	let t1;
-	let div0;
-	let ul;
-	let li0;
-	let a1;
-	let t2;
-	let t3;
-	let li1;
-	let a2;
-	let t4;
-	let t5;
-	let div2;
-	let a3;
-	let t6;
-	let button;
-	let icon;
-	let t7;
-	let current;
-	let mounted;
-	let dispose;
-
-	function select_block_type(ctx, dirty) {
-		if (/*logo*/ ctx[0].title) return create_if_block_3;
-		if (/*logo*/ ctx[0].image.url) return create_if_block_4;
-	}
-
-	let current_block_type = select_block_type(ctx);
-	let if_block0 = current_block_type && current_block_type(ctx);
-	let each_value_1 = /*site_nav*/ ctx[1];
-	let each_blocks = [];
-
-	for (let i = 0; i < each_value_1.length; i += 1) {
-		each_blocks[i] = create_each_block_1(get_each_context_1(ctx, each_value_1, i));
-	}
-
-	function select_block_type_1(ctx, dirty) {
-		if (/*logo*/ ctx[0].title) return create_if_block_1$1;
-		if (/*logo*/ ctx[0].image.url) return create_if_block_2;
-	}
-
-	let current_block_type_1 = select_block_type_1(ctx);
-	let if_block1 = current_block_type_1 && current_block_type_1(ctx);
-
-	icon = new Component$1({
-			props: { height: "30", icon: "eva:menu-outline" }
-		});
-
-	let if_block2 = /*mobileNavOpen*/ ctx[2] && create_if_block$2(ctx);
-
-	return {
-		c() {
-			div3 = element("div");
-			header = element("header");
-			div1 = element("div");
-			a0 = element("a");
-			if (if_block0) if_block0.c();
-			t0 = space();
-			nav = element("nav");
-
-			for (let i = 0; i < each_blocks.length; i += 1) {
-				each_blocks[i].c();
+			if (!current || dirty & /*form*/ 1 && input_placeholder_value !== (input_placeholder_value = /*form*/ ctx[0].placeholder)) {
+				attr(input, "placeholder", input_placeholder_value);
 			}
 
-			t1 = space();
-			div0 = element("div");
-			ul = element("ul");
-			li0 = element("li");
-			a1 = element("a");
-			t2 = text("EN");
-			t3 = space();
-			li1 = element("li");
-			a2 = element("a");
-			t4 = text("DE");
-			t5 = space();
-			div2 = element("div");
-			a3 = element("a");
-			if (if_block1) if_block1.c();
-			t6 = space();
-			button = element("button");
-			create_component(icon.$$.fragment);
-			t7 = space();
-			if (if_block2) if_block2.c();
-			this.h();
-		},
-		l(nodes) {
-			div3 = claim_element(nodes, "DIV", { class: true, id: true });
-			var div3_nodes = children(div3);
-			header = claim_element(div3_nodes, "HEADER", { class: true });
-			var header_nodes = children(header);
-			div1 = claim_element(header_nodes, "DIV", { class: true });
-			var div1_nodes = children(div1);
-			a0 = claim_element(div1_nodes, "A", { href: true, class: true });
-			var a0_nodes = children(a0);
-			if (if_block0) if_block0.l(a0_nodes);
-			a0_nodes.forEach(detach);
-			t0 = claim_space(div1_nodes);
-			nav = claim_element(div1_nodes, "NAV", { class: true });
-			var nav_nodes = children(nav);
+			let previous_block_index = current_block_type_index;
+			current_block_type_index = select_block_type_1(ctx);
 
-			for (let i = 0; i < each_blocks.length; i += 1) {
-				each_blocks[i].l(nav_nodes);
-			}
-
-			t1 = claim_space(nav_nodes);
-			div0 = claim_element(nav_nodes, "DIV", { class: true });
-			var div0_nodes = children(div0);
-			ul = claim_element(div0_nodes, "UL", { class: true });
-			var ul_nodes = children(ul);
-			li0 = claim_element(ul_nodes, "LI", { class: true });
-			var li0_nodes = children(li0);
-			a1 = claim_element(li0_nodes, "A", { href: true, id: true });
-			var a1_nodes = children(a1);
-			t2 = claim_text(a1_nodes, "EN");
-			a1_nodes.forEach(detach);
-			li0_nodes.forEach(detach);
-			t3 = claim_space(ul_nodes);
-			li1 = claim_element(ul_nodes, "LI", { class: true });
-			var li1_nodes = children(li1);
-			a2 = claim_element(li1_nodes, "A", { href: true, id: true });
-			var a2_nodes = children(a2);
-			t4 = claim_text(a2_nodes, "DE");
-			a2_nodes.forEach(detach);
-			li1_nodes.forEach(detach);
-			ul_nodes.forEach(detach);
-			div0_nodes.forEach(detach);
-			nav_nodes.forEach(detach);
-			div1_nodes.forEach(detach);
-			t5 = claim_space(header_nodes);
-			div2 = claim_element(header_nodes, "DIV", { class: true });
-			var div2_nodes = children(div2);
-			a3 = claim_element(div2_nodes, "A", { href: true, class: true });
-			var a3_nodes = children(a3);
-			if (if_block1) if_block1.l(a3_nodes);
-			a3_nodes.forEach(detach);
-			t6 = claim_space(div2_nodes);
-			button = claim_element(div2_nodes, "BUTTON", { id: true, "aria-label": true });
-			var button_nodes = children(button);
-			claim_component(icon.$$.fragment, button_nodes);
-			button_nodes.forEach(detach);
-			t7 = claim_space(div2_nodes);
-			if (if_block2) if_block2.l(div2_nodes);
-			div2_nodes.forEach(detach);
-			header_nodes.forEach(detach);
-			div3_nodes.forEach(detach);
-			this.h();
-		},
-		h() {
-			attr(a0, "href", "/");
-			attr(a0, "class", "logo svelte-40bdid");
-			attr(a1, "href", "/");
-			attr(a1, "id", "link-en");
-			attr(li0, "class", "svelte-40bdid");
-			toggle_class(li0, "active", !window.location.pathname.includes("/de"));
-			attr(a2, "href", "/");
-			attr(a2, "id", "link-de");
-			attr(li1, "class", "svelte-40bdid");
-			toggle_class(li1, "active", window.location.pathname.includes("/de"));
-			attr(ul, "class", "svelte-40bdid");
-			attr(div0, "class", "language-select svelte-40bdid");
-			attr(nav, "class", "svelte-40bdid");
-			attr(div1, "class", "desktop-nav svelte-40bdid");
-			attr(a3, "href", "/");
-			attr(a3, "class", "logo svelte-40bdid");
-			attr(button, "id", "open");
-			attr(button, "aria-label", "Open mobile navigation");
-			attr(div2, "class", "mobile-nav svelte-40bdid");
-			attr(header, "class", "section-container svelte-40bdid");
-			attr(div3, "class", "section");
-			attr(div3, "id", "section-d6ba4775");
-		},
-		m(target, anchor) {
-			insert_hydration(target, div3, anchor);
-			append_hydration(div3, header);
-			append_hydration(header, div1);
-			append_hydration(div1, a0);
-			if (if_block0) if_block0.m(a0, null);
-			append_hydration(div1, t0);
-			append_hydration(div1, nav);
-
-			for (let i = 0; i < each_blocks.length; i += 1) {
-				if (each_blocks[i]) {
-					each_blocks[i].m(nav, null);
-				}
-			}
-
-			append_hydration(nav, t1);
-			append_hydration(nav, div0);
-			append_hydration(div0, ul);
-			append_hydration(ul, li0);
-			append_hydration(li0, a1);
-			append_hydration(a1, t2);
-			append_hydration(ul, t3);
-			append_hydration(ul, li1);
-			append_hydration(li1, a2);
-			append_hydration(a2, t4);
-			append_hydration(header, t5);
-			append_hydration(header, div2);
-			append_hydration(div2, a3);
-			if (if_block1) if_block1.m(a3, null);
-			append_hydration(div2, t6);
-			append_hydration(div2, button);
-			mount_component(icon, button, null);
-			append_hydration(div2, t7);
-			if (if_block2) if_block2.m(div2, null);
-			current = true;
-
-			if (!mounted) {
-				dispose = listen(button, "click", /*click_handler*/ ctx[7]);
-				mounted = true;
-			}
-		},
-		p(ctx, [dirty]) {
-			if (current_block_type === (current_block_type = select_block_type(ctx)) && if_block0) {
-				if_block0.p(ctx, dirty);
+			if (current_block_type_index === previous_block_index) {
+				if_blocks[current_block_type_index].p(ctx, dirty);
 			} else {
-				if (if_block0) if_block0.d(1);
-				if_block0 = current_block_type && current_block_type(ctx);
-
-				if (if_block0) {
-					if_block0.c();
-					if_block0.m(a0, null);
-				}
-			}
-
-			if (dirty & /*site_nav, window*/ 2) {
-				each_value_1 = /*site_nav*/ ctx[1];
-				let i;
-
-				for (i = 0; i < each_value_1.length; i += 1) {
-					const child_ctx = get_each_context_1(ctx, each_value_1, i);
-
-					if (each_blocks[i]) {
-						each_blocks[i].p(child_ctx, dirty);
-					} else {
-						each_blocks[i] = create_each_block_1(child_ctx);
-						each_blocks[i].c();
-						each_blocks[i].m(nav, t1);
-					}
-				}
-
-				for (; i < each_blocks.length; i += 1) {
-					each_blocks[i].d(1);
-				}
-
-				each_blocks.length = each_value_1.length;
-			}
-
-			if (current_block_type_1 === (current_block_type_1 = select_block_type_1(ctx)) && if_block1) {
-				if_block1.p(ctx, dirty);
-			} else {
-				if (if_block1) if_block1.d(1);
-				if_block1 = current_block_type_1 && current_block_type_1(ctx);
-
-				if (if_block1) {
-					if_block1.c();
-					if_block1.m(a3, null);
-				}
-			}
-
-			if (/*mobileNavOpen*/ ctx[2]) {
-				if (if_block2) {
-					if_block2.p(ctx, dirty);
-
-					if (dirty & /*mobileNavOpen*/ 4) {
-						transition_in(if_block2, 1);
-					}
-				} else {
-					if_block2 = create_if_block$2(ctx);
-					if_block2.c();
-					transition_in(if_block2, 1);
-					if_block2.m(div2, null);
-				}
-			} else if (if_block2) {
 				group_outros();
 
-				transition_out(if_block2, 1, 1, () => {
-					if_block2 = null;
+				transition_out(if_blocks[previous_block_index], 1, 1, () => {
+					if_blocks[previous_block_index] = null;
 				});
 
 				check_outros();
+				if_block = if_blocks[current_block_type_index];
+
+				if (!if_block) {
+					if_block = if_blocks[current_block_type_index] = if_block_creators[current_block_type_index](ctx);
+					if_block.c();
+				} else {
+					if_block.p(ctx, dirty);
+				}
+
+				transition_in(if_block, 1);
+				if_block.m(button, null);
 			}
 		},
 		i(local) {
 			if (current) return;
-			transition_in(icon.$$.fragment, local);
-			transition_in(if_block2);
+			transition_in(if_block);
 			current = true;
 		},
 		o(local) {
-			transition_out(icon.$$.fragment, local);
-			transition_out(if_block2);
+			transition_out(if_block);
 			current = false;
 		},
 		d(detaching) {
-			if (detaching) detach(div3);
-
-			if (if_block0) {
-				if_block0.d();
-			}
-
-			destroy_each(each_blocks, detaching);
-
-			if (if_block1) {
-				if_block1.d();
-			}
-
-			destroy_component(icon);
-			if (if_block2) if_block2.d();
+			if (detaching) detach(form_1);
+			if_blocks[current_block_type_index].d();
 			mounted = false;
 			dispose();
 		}
 	};
 }
 
-function instance$2($$self, $$props, $$invalidate) {
-	let { favicon } = $$props;
-	let { image } = $$props;
-	let { title } = $$props;
-	let { description } = $$props;
-	let { logo } = $$props;
-	let { site_nav } = $$props;
-	let mobileNavOpen = false;
-
-	onMount(() => {
-		document.getElementById("link-en").href = window.location.pathname.replace(/en\/|de\//gi, "");
-		document.getElementById("link-de").href = "/de" + window.location.pathname.replace(/en\/|de\//gi, "");
-	});
-
-	const click_handler = () => $$invalidate(2, mobileNavOpen = true);
-	const click_handler_1 = () => $$invalidate(2, mobileNavOpen = false);
-
-	$$self.$$set = $$props => {
-		if ('favicon' in $$props) $$invalidate(3, favicon = $$props.favicon);
-		if ('image' in $$props) $$invalidate(4, image = $$props.image);
-		if ('title' in $$props) $$invalidate(5, title = $$props.title);
-		if ('description' in $$props) $$invalidate(6, description = $$props.description);
-		if ('logo' in $$props) $$invalidate(0, logo = $$props.logo);
-		if ('site_nav' in $$props) $$invalidate(1, site_nav = $$props.site_nav);
-	};
-
-	return [
-		logo,
-		site_nav,
-		mobileNavOpen,
-		favicon,
-		image,
-		title,
-		description,
-		click_handler,
-		click_handler_1
-	];
-}
-
-class Component$2 extends SvelteComponent {
-	constructor(options) {
-		super();
-
-		init(this, options, instance$2, create_fragment$2, safe_not_equal, {
-			favicon: 3,
-			image: 4,
-			title: 5,
-			description: 6,
-			logo: 0,
-			site_nav: 1
-		});
-	}
-}
-
-/* generated by Svelte v3.59.1 */
-
-function create_fragment$3(ctx) {
-	let div7;
-	let a0;
-	let a0_href_value;
-	let t0;
-	let a1;
-	let a1_href_value;
-	let t1;
-	let div6;
-	let div5;
-	let img0;
-	let img0_src_value;
-	let img0_alt_value;
-	let t2;
-	let img1;
-	let img1_src_value;
-	let img1_alt_value;
-	let t3;
-	let div0;
-	let t4;
-	let div1;
-	let t5;
-	let div2;
-	let t6;
-	let div3;
-	let t7;
-	let t8;
-	let div4;
-	let t9;
-
-	return {
-		c() {
-			div7 = element("div");
-			a0 = element("a");
-			t0 = space();
-			a1 = element("a");
-			t1 = space();
-			div6 = element("div");
-			div5 = element("div");
-			img0 = element("img");
-			t2 = space();
-			img1 = element("img");
-			t3 = space();
-			div0 = element("div");
-			t4 = space();
-			div1 = element("div");
-			t5 = space();
-			div2 = element("div");
-			t6 = space();
-			div3 = element("div");
-			t7 = text(/*leftlabel*/ ctx[4]);
-			t8 = space();
-			div4 = element("div");
-			t9 = text(/*rightlabel*/ ctx[5]);
-			this.h();
-		},
-		l(nodes) {
-			div7 = claim_element(nodes, "DIV", { class: true, id: true });
-			var div7_nodes = children(div7);
-			a0 = claim_element(div7_nodes, "A", { id: true, href: true, style: true });
-			children(a0).forEach(detach);
-			t0 = claim_space(div7_nodes);
-			a1 = claim_element(div7_nodes, "A", { id: true, href: true, style: true });
-			children(a1).forEach(detach);
-			t1 = claim_space(div7_nodes);
-			div6 = claim_element(div7_nodes, "DIV", { class: true });
-			var div6_nodes = children(div6);
-			div5 = claim_element(div6_nodes, "DIV", { class: true });
-			var div5_nodes = children(div5);
-
-			img0 = claim_element(div5_nodes, "IMG", {
-				src: true,
-				alt: true,
-				class: true,
-				onclick: true
-			});
-
-			t2 = claim_space(div5_nodes);
-
-			img1 = claim_element(div5_nodes, "IMG", {
-				src: true,
-				alt: true,
-				class: true,
-				onclick: true
-			});
-
-			t3 = claim_space(div5_nodes);
-			div0 = claim_element(div5_nodes, "DIV", { class: true });
-			children(div0).forEach(detach);
-			t4 = claim_space(div5_nodes);
-			div1 = claim_element(div5_nodes, "DIV", { class: true });
-			children(div1).forEach(detach);
-			t5 = claim_space(div5_nodes);
-			div2 = claim_element(div5_nodes, "DIV", { class: true });
-			children(div2).forEach(detach);
-			t6 = claim_space(div5_nodes);
-			div3 = claim_element(div5_nodes, "DIV", { class: true });
-			var div3_nodes = children(div3);
-			t7 = claim_text(div3_nodes, /*leftlabel*/ ctx[4]);
-			div3_nodes.forEach(detach);
-			t8 = claim_space(div5_nodes);
-			div4 = claim_element(div5_nodes, "DIV", { class: true });
-			var div4_nodes = children(div4);
-			t9 = claim_text(div4_nodes, /*rightlabel*/ ctx[5]);
-			div4_nodes.forEach(detach);
-			div5_nodes.forEach(detach);
-			div6_nodes.forEach(detach);
-			div7_nodes.forEach(detach);
-			this.h();
-		},
-		h() {
-			attr(a0, "id", "careerLink");
-			attr(a0, "href", a0_href_value = /*career_link*/ ctx[2].url);
-			set_style(a0, "display", "none");
-			attr(a1, "id", "hobbyLink");
-			attr(a1, "href", a1_href_value = /*hobby_link*/ ctx[3].url);
-			set_style(a1, "display", "none");
-			if (!src_url_equal(img0.src, img0_src_value = /*hobby*/ ctx[1].url)) attr(img0, "src", img0_src_value);
-			attr(img0, "alt", img0_alt_value = /*hobby*/ ctx[1].alt);
-			attr(img0, "class", "image hobby svelte-195jxa6");
-			attr(img0, "onclick", "document.getElementById('hobbyLink').click();");
-			if (!src_url_equal(img1.src, img1_src_value = /*career*/ ctx[0].url)) attr(img1, "src", img1_src_value);
-			attr(img1, "alt", img1_alt_value = /*career*/ ctx[0].alt);
-			attr(img1, "class", "image career svelte-195jxa6");
-			attr(img1, "onclick", "document.getElementById('careerLink').click();");
-			attr(div0, "class", "gradient-background gradient-background-career svelte-195jxa6");
-			attr(div1, "class", "gradient-background gradient-background-hobby svelte-195jxa6");
-			attr(div2, "class", "gradient-overlay svelte-195jxa6");
-			attr(div3, "class", "label career svelte-195jxa6");
-			attr(div4, "class", "label hobby svelte-195jxa6");
-			attr(div5, "class", "zoom-container svelte-195jxa6");
-			attr(div6, "class", "hero svelte-195jxa6");
-			attr(div7, "class", "section");
-			attr(div7, "id", "section-ee97fb16");
-		},
-		m(target, anchor) {
-			insert_hydration(target, div7, anchor);
-			append_hydration(div7, a0);
-			append_hydration(div7, t0);
-			append_hydration(div7, a1);
-			append_hydration(div7, t1);
-			append_hydration(div7, div6);
-			append_hydration(div6, div5);
-			append_hydration(div5, img0);
-			append_hydration(div5, t2);
-			append_hydration(div5, img1);
-			append_hydration(div5, t3);
-			append_hydration(div5, div0);
-			append_hydration(div5, t4);
-			append_hydration(div5, div1);
-			append_hydration(div5, t5);
-			append_hydration(div5, div2);
-			append_hydration(div5, t6);
-			append_hydration(div5, div3);
-			append_hydration(div3, t7);
-			append_hydration(div5, t8);
-			append_hydration(div5, div4);
-			append_hydration(div4, t9);
-		},
-		p(ctx, [dirty]) {
-			if (dirty & /*career_link*/ 4 && a0_href_value !== (a0_href_value = /*career_link*/ ctx[2].url)) {
-				attr(a0, "href", a0_href_value);
-			}
-
-			if (dirty & /*hobby_link*/ 8 && a1_href_value !== (a1_href_value = /*hobby_link*/ ctx[3].url)) {
-				attr(a1, "href", a1_href_value);
-			}
-
-			if (dirty & /*hobby*/ 2 && !src_url_equal(img0.src, img0_src_value = /*hobby*/ ctx[1].url)) {
-				attr(img0, "src", img0_src_value);
-			}
-
-			if (dirty & /*hobby*/ 2 && img0_alt_value !== (img0_alt_value = /*hobby*/ ctx[1].alt)) {
-				attr(img0, "alt", img0_alt_value);
-			}
-
-			if (dirty & /*career*/ 1 && !src_url_equal(img1.src, img1_src_value = /*career*/ ctx[0].url)) {
-				attr(img1, "src", img1_src_value);
-			}
-
-			if (dirty & /*career*/ 1 && img1_alt_value !== (img1_alt_value = /*career*/ ctx[0].alt)) {
-				attr(img1, "alt", img1_alt_value);
-			}
-
-			if (dirty & /*leftlabel*/ 16) set_data(t7, /*leftlabel*/ ctx[4]);
-			if (dirty & /*rightlabel*/ 32) set_data(t9, /*rightlabel*/ ctx[5]);
-		},
-		i: noop,
-		o: noop,
-		d(detaching) {
-			if (detaching) detach(div7);
-		}
-	};
-}
-
-function instance$3($$self, $$props, $$invalidate) {
-	let { favicon } = $$props;
-	let { image } = $$props;
-	let { title } = $$props;
-	let { description } = $$props;
-	let { career } = $$props;
-	let { hobby } = $$props;
-	let { career_link } = $$props;
-	let { hobby_link } = $$props;
-	let { leftlabel } = $$props;
-	let { rightlabel } = $$props;
-
-	$$self.$$set = $$props => {
-		if ('favicon' in $$props) $$invalidate(6, favicon = $$props.favicon);
-		if ('image' in $$props) $$invalidate(7, image = $$props.image);
-		if ('title' in $$props) $$invalidate(8, title = $$props.title);
-		if ('description' in $$props) $$invalidate(9, description = $$props.description);
-		if ('career' in $$props) $$invalidate(0, career = $$props.career);
-		if ('hobby' in $$props) $$invalidate(1, hobby = $$props.hobby);
-		if ('career_link' in $$props) $$invalidate(2, career_link = $$props.career_link);
-		if ('hobby_link' in $$props) $$invalidate(3, hobby_link = $$props.hobby_link);
-		if ('leftlabel' in $$props) $$invalidate(4, leftlabel = $$props.leftlabel);
-		if ('rightlabel' in $$props) $$invalidate(5, rightlabel = $$props.rightlabel);
-	};
-
-	return [
-		career,
-		hobby,
-		career_link,
-		hobby_link,
-		leftlabel,
-		rightlabel,
-		favicon,
-		image,
-		title,
-		description
-	];
-}
-
-class Component$3 extends SvelteComponent {
-	constructor(options) {
-		super();
-
-		init(this, options, instance$3, create_fragment$3, safe_not_equal, {
-			favicon: 6,
-			image: 7,
-			title: 8,
-			description: 9,
-			career: 0,
-			hobby: 1,
-			career_link: 2,
-			hobby_link: 3,
-			leftlabel: 4,
-			rightlabel: 5
-		});
-	}
-}
-
-/* generated by Svelte v3.59.1 */
-
-function get_each_context$1(ctx, list, i) {
-	const child_ctx = ctx.slice();
-	child_ctx[7] = list[i].link;
-	child_ctx[8] = list[i].icon;
-	return child_ctx;
-}
-
-// (84:8) {#each social_links as {link, icon}}
-function create_each_block$1(ctx) {
-	let li;
-	let a;
+// (177:8) {:else}
+function create_else_block(ctx) {
 	let icon;
-	let a_href_value;
-	let a_aria_label_value;
-	let t;
 	let current;
-	icon = new Component$1({ props: { icon: /*icon*/ ctx[8] } });
+	icon = new Component$1({ props: { icon: "eos-icons:loading" } });
 
 	return {
 		c() {
-			li = element("li");
-			a = element("a");
 			create_component(icon.$$.fragment);
-			t = space();
-			this.h();
 		},
 		l(nodes) {
-			li = claim_element(nodes, "LI", {});
-			var li_nodes = children(li);
-
-			a = claim_element(li_nodes, "A", {
-				href: true,
-				"aria-label": true,
-				class: true
-			});
-
-			var a_nodes = children(a);
-			claim_component(icon.$$.fragment, a_nodes);
-			a_nodes.forEach(detach);
-			t = claim_space(li_nodes);
-			li_nodes.forEach(detach);
-			this.h();
-		},
-		h() {
-			attr(a, "href", a_href_value = /*link*/ ctx[7].url);
-			attr(a, "aria-label", a_aria_label_value = /*icon*/ ctx[8]);
-			attr(a, "class", "svelte-12x2z6p");
+			claim_component(icon.$$.fragment, nodes);
 		},
 		m(target, anchor) {
-			insert_hydration(target, li, anchor);
-			append_hydration(li, a);
-			mount_component(icon, a, null);
-			append_hydration(li, t);
-			current = true;
-		},
-		p(ctx, dirty) {
-			const icon_changes = {};
-			if (dirty & /*social_links*/ 1) icon_changes.icon = /*icon*/ ctx[8];
-			icon.$set(icon_changes);
-
-			if (!current || dirty & /*social_links*/ 1 && a_href_value !== (a_href_value = /*link*/ ctx[7].url)) {
-				attr(a, "href", a_href_value);
-			}
-
-			if (!current || dirty & /*social_links*/ 1 && a_aria_label_value !== (a_aria_label_value = /*icon*/ ctx[8])) {
-				attr(a, "aria-label", a_aria_label_value);
-			}
-		},
-		i(local) {
-			if (current) return;
-			transition_in(icon.$$.fragment, local);
-			current = true;
-		},
-		o(local) {
-			transition_out(icon.$$.fragment, local);
-			current = false;
-		},
-		d(detaching) {
-			if (detaching) detach(li);
-			destroy_component(icon);
-		}
-	};
-}
-
-function create_fragment$4(ctx) {
-	let div2;
-	let footer;
-	let div1;
-	let hr;
-	let t0;
-	let div0;
-	let span0;
-	let t1;
-	let t2_value = new Date().getFullYear() + "";
-	let t2;
-	let t3;
-	let span2;
-	let t4;
-	let span1;
-	let t5;
-	let t6;
-	let t7;
-	let ul;
-	let current;
-	let each_value = /*social_links*/ ctx[0];
-	let each_blocks = [];
-
-	for (let i = 0; i < each_value.length; i += 1) {
-		each_blocks[i] = create_each_block$1(get_each_context$1(ctx, each_value, i));
-	}
-
-	const out = i => transition_out(each_blocks[i], 1, 1, () => {
-		each_blocks[i] = null;
-	});
-
-	return {
-		c() {
-			div2 = element("div");
-			footer = element("footer");
-			div1 = element("div");
-			hr = element("hr");
-			t0 = space();
-			div0 = element("div");
-			span0 = element("span");
-			t1 = text("Copyright ");
-			t2 = text(t2_value);
-			t3 = space();
-			span2 = element("span");
-			t4 = text("Made by Fabian with ");
-			span1 = element("span");
-			t5 = text("♥");
-			t6 = text(" ☕");
-			t7 = space();
-			ul = element("ul");
-
-			for (let i = 0; i < each_blocks.length; i += 1) {
-				each_blocks[i].c();
-			}
-
-			this.h();
-		},
-		l(nodes) {
-			div2 = claim_element(nodes, "DIV", { class: true, id: true });
-			var div2_nodes = children(div2);
-			footer = claim_element(div2_nodes, "FOOTER", {});
-			var footer_nodes = children(footer);
-			div1 = claim_element(footer_nodes, "DIV", { class: true });
-			var div1_nodes = children(div1);
-			hr = claim_element(div1_nodes, "HR", { class: true });
-			t0 = claim_space(div1_nodes);
-			div0 = claim_element(div1_nodes, "DIV", { class: true });
-			var div0_nodes = children(div0);
-			span0 = claim_element(div0_nodes, "SPAN", { class: true });
-			var span0_nodes = children(span0);
-			t1 = claim_text(span0_nodes, "Copyright ");
-			t2 = claim_text(span0_nodes, t2_value);
-			span0_nodes.forEach(detach);
-			t3 = claim_space(div0_nodes);
-			span2 = claim_element(div0_nodes, "SPAN", { class: true });
-			var span2_nodes = children(span2);
-			t4 = claim_text(span2_nodes, "Made by Fabian with ");
-			span1 = claim_element(span2_nodes, "SPAN", { class: true });
-			var span1_nodes = children(span1);
-			t5 = claim_text(span1_nodes, "♥");
-			span1_nodes.forEach(detach);
-			t6 = claim_text(span2_nodes, " ☕");
-			span2_nodes.forEach(detach);
-			t7 = claim_space(div0_nodes);
-			ul = claim_element(div0_nodes, "UL", { class: true });
-			var ul_nodes = children(ul);
-
-			for (let i = 0; i < each_blocks.length; i += 1) {
-				each_blocks[i].l(ul_nodes);
-			}
-
-			ul_nodes.forEach(detach);
-			div0_nodes.forEach(detach);
-			div1_nodes.forEach(detach);
-			footer_nodes.forEach(detach);
-			div2_nodes.forEach(detach);
-			this.h();
-		},
-		h() {
-			attr(hr, "class", "svelte-12x2z6p");
-			attr(span0, "class", "copyright svelte-12x2z6p");
-			attr(span1, "class", "strikethrough svelte-12x2z6p");
-			attr(span2, "class", "me svelte-12x2z6p");
-			attr(ul, "class", "svelte-12x2z6p");
-			attr(div0, "class", "footer svelte-12x2z6p");
-			attr(div1, "class", "section-container svelte-12x2z6p");
-			attr(div2, "class", "section");
-			attr(div2, "id", "section-1c388ad3");
-		},
-		m(target, anchor) {
-			insert_hydration(target, div2, anchor);
-			append_hydration(div2, footer);
-			append_hydration(footer, div1);
-			append_hydration(div1, hr);
-			append_hydration(div1, t0);
-			append_hydration(div1, div0);
-			append_hydration(div0, span0);
-			append_hydration(span0, t1);
-			append_hydration(span0, t2);
-			append_hydration(div0, t3);
-			append_hydration(div0, span2);
-			append_hydration(span2, t4);
-			append_hydration(span2, span1);
-			append_hydration(span1, t5);
-			append_hydration(span2, t6);
-			append_hydration(div0, t7);
-			append_hydration(div0, ul);
-
-			for (let i = 0; i < each_blocks.length; i += 1) {
-				if (each_blocks[i]) {
-					each_blocks[i].m(ul, null);
-				}
-			}
-
-			current = true;
-		},
-		p(ctx, [dirty]) {
-			if (dirty & /*social_links*/ 1) {
-				each_value = /*social_links*/ ctx[0];
-				let i;
-
-				for (i = 0; i < each_value.length; i += 1) {
-					const child_ctx = get_each_context$1(ctx, each_value, i);
-
-					if (each_blocks[i]) {
-						each_blocks[i].p(child_ctx, dirty);
-						transition_in(each_blocks[i], 1);
-					} else {
-						each_blocks[i] = create_each_block$1(child_ctx);
-						each_blocks[i].c();
-						transition_in(each_blocks[i], 1);
-						each_blocks[i].m(ul, null);
-					}
-				}
-
-				group_outros();
-
-				for (i = each_value.length; i < each_blocks.length; i += 1) {
-					out(i);
-				}
-
-				check_outros();
-			}
-		},
-		i(local) {
-			if (current) return;
-
-			for (let i = 0; i < each_value.length; i += 1) {
-				transition_in(each_blocks[i]);
-			}
-
-			current = true;
-		},
-		o(local) {
-			each_blocks = each_blocks.filter(Boolean);
-
-			for (let i = 0; i < each_blocks.length; i += 1) {
-				transition_out(each_blocks[i]);
-			}
-
-			current = false;
-		},
-		d(detaching) {
-			if (detaching) detach(div2);
-			destroy_each(each_blocks, detaching);
-		}
-	};
-}
-
-function instance$4($$self, $$props, $$invalidate) {
-	let { favicon } = $$props;
-	let { image } = $$props;
-	let { title } = $$props;
-	let { description } = $$props;
-	let { heading } = $$props;
-	let { email } = $$props;
-	let { social_links } = $$props;
-
-	$$self.$$set = $$props => {
-		if ('favicon' in $$props) $$invalidate(1, favicon = $$props.favicon);
-		if ('image' in $$props) $$invalidate(2, image = $$props.image);
-		if ('title' in $$props) $$invalidate(3, title = $$props.title);
-		if ('description' in $$props) $$invalidate(4, description = $$props.description);
-		if ('heading' in $$props) $$invalidate(5, heading = $$props.heading);
-		if ('email' in $$props) $$invalidate(6, email = $$props.email);
-		if ('social_links' in $$props) $$invalidate(0, social_links = $$props.social_links);
-	};
-
-	return [social_links, favicon, image, title, description, heading, email];
-}
-
-class Component$4 extends SvelteComponent {
-	constructor(options) {
-		super();
-
-		init(this, options, instance$4, create_fragment$4, safe_not_equal, {
-			favicon: 1,
-			image: 2,
-			title: 3,
-			description: 4,
-			heading: 5,
-			email: 6,
-			social_links: 0
-		});
-	}
-}
-
-/* generated by Svelte v3.59.1 */
-
-function instance$5($$self, $$props, $$invalidate) {
-	let { favicon } = $$props;
-	let { image } = $$props;
-	let { title } = $$props;
-	let { description } = $$props;
-
-	$$self.$$set = $$props => {
-		if ('favicon' in $$props) $$invalidate(0, favicon = $$props.favicon);
-		if ('image' in $$props) $$invalidate(1, image = $$props.image);
-		if ('title' in $$props) $$invalidate(2, title = $$props.title);
-		if ('description' in $$props) $$invalidate(3, description = $$props.description);
-	};
-
-	return [favicon, image, title, description];
-}
-
-class Component$5 extends SvelteComponent {
-	constructor(options) {
-		super();
-
-		init(this, options, instance$5, null, safe_not_equal, {
-			favicon: 0,
-			image: 1,
-			title: 2,
-			description: 3
-		});
-	}
-}
-
-/* generated by Svelte v3.59.1 */
-
-function create_fragment$5(ctx) {
-	let component_0;
-	let t0;
-	let component_1;
-	let t1;
-	let component_2;
-	let t2;
-	let component_3;
-	let t3;
-	let component_4;
-	let current;
-
-	component_0 = new Component({
-			props: {
-				favicon: {
-					"alt": "",
-					"src": "https://snmjgwmbisbdshitvcmi.supabase.co/storage/v1/object/public/images/c4b279d1-26c1-48a7-b42d-92748ab1745f/1612183359674diamondIcon.svg",
-					"url": "https://snmjgwmbisbdshitvcmi.supabase.co/storage/v1/object/public/images/c4b279d1-26c1-48a7-b42d-92748ab1745f/1612183359674diamondIcon.svg",
-					"size": 1
-				},
-				image: {
-					"alt": "",
-					"src": "https://snmjgwmbisbdshitvcmi.supabase.co/storage/v1/object/public/images/c4b279d1-26c1-48a7-b42d-92748ab1745f/1612183359674diamondIcon.svg",
-					"url": "https://snmjgwmbisbdshitvcmi.supabase.co/storage/v1/object/public/images/c4b279d1-26c1-48a7-b42d-92748ab1745f/1612183359674diamondIcon.svg",
-					"size": 1
-				},
-				title: "Portfolio",
-				description: "Portfolio of Fabian Kessler"
-			}
-		});
-
-	component_1 = new Component$2({
-			props: {
-				favicon: {
-					"alt": "",
-					"src": "https://snmjgwmbisbdshitvcmi.supabase.co/storage/v1/object/public/images/c4b279d1-26c1-48a7-b42d-92748ab1745f/1612183359674diamondIcon.svg",
-					"url": "https://snmjgwmbisbdshitvcmi.supabase.co/storage/v1/object/public/images/c4b279d1-26c1-48a7-b42d-92748ab1745f/1612183359674diamondIcon.svg",
-					"size": 1
-				},
-				image: {
-					"alt": "",
-					"src": "https://snmjgwmbisbdshitvcmi.supabase.co/storage/v1/object/public/images/c4b279d1-26c1-48a7-b42d-92748ab1745f/1612183359674diamondIcon.svg",
-					"url": "https://snmjgwmbisbdshitvcmi.supabase.co/storage/v1/object/public/images/c4b279d1-26c1-48a7-b42d-92748ab1745f/1612183359674diamondIcon.svg",
-					"size": 1
-				},
-				title: "Portfolio",
-				description: "Portfolio of Fabian Kessler",
-				logo: {
-					"image": {
-						"alt": "Portfolio of Fabian Kessler",
-						"src": "https://snmjgwmbisbdshitvcmi.supabase.co/storage/v1/object/public/images/c4b279d1-26c1-48a7-b42d-92748ab1745f/1612183359674diamondIcon.svg",
-						"url": "https://snmjgwmbisbdshitvcmi.supabase.co/storage/v1/object/public/images/c4b279d1-26c1-48a7-b42d-92748ab1745f/1612183359674diamondIcon.svg",
-						"size": 1
-					},
-					"title": "Fabian Kessler"
-				},
-				site_nav: [
-					{ "link": { "url": "/", "label": "Blog" } },
-					{
-						"link": { "url": "/", "label": "Impressum" }
-					}
-				]
-			}
-		});
-
-	component_2 = new Component$3({
-			props: {
-				favicon: {
-					"alt": "",
-					"src": "https://snmjgwmbisbdshitvcmi.supabase.co/storage/v1/object/public/images/c4b279d1-26c1-48a7-b42d-92748ab1745f/1612183359674diamondIcon.svg",
-					"url": "https://snmjgwmbisbdshitvcmi.supabase.co/storage/v1/object/public/images/c4b279d1-26c1-48a7-b42d-92748ab1745f/1612183359674diamondIcon.svg",
-					"size": 1
-				},
-				image: {
-					"alt": "",
-					"src": "https://snmjgwmbisbdshitvcmi.supabase.co/storage/v1/object/public/images/c4b279d1-26c1-48a7-b42d-92748ab1745f/1612183359674diamondIcon.svg",
-					"url": "https://snmjgwmbisbdshitvcmi.supabase.co/storage/v1/object/public/images/c4b279d1-26c1-48a7-b42d-92748ab1745f/1612183359674diamondIcon.svg",
-					"size": 1
-				},
-				title: "Portfolio",
-				description: "Portfolio of Fabian Kessler",
-				career: {
-					"src": "https://snmjgwmbisbdshitvcmi.supabase.co/storage/v1/object/public/images/c4b279d1-26c1-48a7-b42d-92748ab1745f/1690810878663career.png",
-					"url": "https://snmjgwmbisbdshitvcmi.supabase.co/storage/v1/object/public/images/c4b279d1-26c1-48a7-b42d-92748ab1745f/1690810878663career.png",
-					"size": 345,
-					"label": ""
-				},
-				hobby: {
-					"alt": "hobby",
-					"src": "https://snmjgwmbisbdshitvcmi.supabase.co/storage/v1/object/public/images/c4b279d1-26c1-48a7-b42d-92748ab1745f/1690810871446hobby.png",
-					"url": "https://snmjgwmbisbdshitvcmi.supabase.co/storage/v1/object/public/images/c4b279d1-26c1-48a7-b42d-92748ab1745f/1690810871446hobby.png",
-					"size": 422
-				},
-				career_link: {
-					"url": "/de/career",
-					"label": "",
-					"active": false
-				},
-				hobby_link: {
-					"url": "/de/hobby",
-					"label": "",
-					"active": false
-				},
-				leftlabel: "Karriere",
-				rightlabel: "Hobbys"
-			}
-		});
-
-	component_3 = new Component$4({
-			props: {
-				favicon: {
-					"alt": "",
-					"src": "https://snmjgwmbisbdshitvcmi.supabase.co/storage/v1/object/public/images/c4b279d1-26c1-48a7-b42d-92748ab1745f/1612183359674diamondIcon.svg",
-					"url": "https://snmjgwmbisbdshitvcmi.supabase.co/storage/v1/object/public/images/c4b279d1-26c1-48a7-b42d-92748ab1745f/1612183359674diamondIcon.svg",
-					"size": 1
-				},
-				image: {
-					"alt": "",
-					"src": "https://snmjgwmbisbdshitvcmi.supabase.co/storage/v1/object/public/images/c4b279d1-26c1-48a7-b42d-92748ab1745f/1612183359674diamondIcon.svg",
-					"url": "https://snmjgwmbisbdshitvcmi.supabase.co/storage/v1/object/public/images/c4b279d1-26c1-48a7-b42d-92748ab1745f/1612183359674diamondIcon.svg",
-					"size": 1
-				},
-				title: "Portfolio",
-				description: "Portfolio of Fabian Kessler",
-				heading: "",
-				email: "",
-				social_links: [
-					{
-						"icon": "mdi:github",
-						"link": {
-							"url": "https://github.com/SpyrexDE",
-							"label": "Github",
-							"active": false
-						}
-					},
-					{
-						"icon": "mdi:youtube",
-						"link": {
-							"url": "https://www.youtube.com/@velius_development",
-							"label": "YouTube"
-						}
-					},
-					{
-						"icon": "mdi:reddit",
-						"link": {
-							"url": "https://www.reddit.com/user/SpyrexDE",
-							"label": "Reddit"
-						}
-					},
-					{
-						"icon": "mdi:discord",
-						"link": {
-							"url": "https://discordapp.com/users/268097864608120832",
-							"label": "Discord"
-						}
-					},
-					{
-						"icon": "mdi:steam",
-						"link": {
-							"url": "https://steamcommunity.com/id/SpyrexDE/",
-							"label": "Steam"
-						}
-					}
-				]
-			}
-		});
-
-	component_4 = new Component$5({
-			props: {
-				favicon: {
-					"alt": "",
-					"src": "https://snmjgwmbisbdshitvcmi.supabase.co/storage/v1/object/public/images/c4b279d1-26c1-48a7-b42d-92748ab1745f/1612183359674diamondIcon.svg",
-					"url": "https://snmjgwmbisbdshitvcmi.supabase.co/storage/v1/object/public/images/c4b279d1-26c1-48a7-b42d-92748ab1745f/1612183359674diamondIcon.svg",
-					"size": 1
-				},
-				image: {
-					"alt": "",
-					"src": "https://snmjgwmbisbdshitvcmi.supabase.co/storage/v1/object/public/images/c4b279d1-26c1-48a7-b42d-92748ab1745f/1612183359674diamondIcon.svg",
-					"url": "https://snmjgwmbisbdshitvcmi.supabase.co/storage/v1/object/public/images/c4b279d1-26c1-48a7-b42d-92748ab1745f/1612183359674diamondIcon.svg",
-					"size": 1
-				},
-				title: "Portfolio",
-				description: "Portfolio of Fabian Kessler"
-			}
-		});
-
-	return {
-		c() {
-			create_component(component_0.$$.fragment);
-			t0 = space();
-			create_component(component_1.$$.fragment);
-			t1 = space();
-			create_component(component_2.$$.fragment);
-			t2 = space();
-			create_component(component_3.$$.fragment);
-			t3 = space();
-			create_component(component_4.$$.fragment);
-		},
-		l(nodes) {
-			claim_component(component_0.$$.fragment, nodes);
-			t0 = claim_space(nodes);
-			claim_component(component_1.$$.fragment, nodes);
-			t1 = claim_space(nodes);
-			claim_component(component_2.$$.fragment, nodes);
-			t2 = claim_space(nodes);
-			claim_component(component_3.$$.fragment, nodes);
-			t3 = claim_space(nodes);
-			claim_component(component_4.$$.fragment, nodes);
-		},
-		m(target, anchor) {
-			mount_component(component_0, target, anchor);
-			insert_hydration(target, t0, anchor);
-			mount_component(component_1, target, anchor);
-			insert_hydration(target, t1, anchor);
-			mount_component(component_2, target, anchor);
-			insert_hydration(target, t2, anchor);
-			mount_component(component_3, target, anchor);
-			insert_hydration(target, t3, anchor);
-			mount_component(component_4, target, anchor);
+			mount_component(icon, target, anchor);
 			current = true;
 		},
 		p: noop,
 		i(local) {
 			if (current) return;
-			transition_in(component_0.$$.fragment, local);
-			transition_in(component_1.$$.fragment, local);
-			transition_in(component_2.$$.fragment, local);
-			transition_in(component_3.$$.fragment, local);
-			transition_in(component_4.$$.fragment, local);
+			transition_in(icon.$$.fragment, local);
 			current = true;
 		},
 		o(local) {
-			transition_out(component_0.$$.fragment, local);
-			transition_out(component_1.$$.fragment, local);
-			transition_out(component_2.$$.fragment, local);
-			transition_out(component_3.$$.fragment, local);
-			transition_out(component_4.$$.fragment, local);
+			transition_out(icon.$$.fragment, local);
 			current = false;
 		},
 		d(detaching) {
-			destroy_component(component_0, detaching);
-			if (detaching) detach(t0);
-			destroy_component(component_1, detaching);
-			if (detaching) detach(t1);
-			destroy_component(component_2, detaching);
-			if (detaching) detach(t2);
-			destroy_component(component_3, detaching);
-			if (detaching) detach(t3);
-			destroy_component(component_4, detaching);
+			destroy_component(icon, detaching);
 		}
 	};
 }
 
-class Component$6 extends SvelteComponent {
+// (175:8) {#if !submitting}
+function create_if_block_3(ctx) {
+	let t_value = /*form*/ ctx[0].button_label + "";
+	let t;
+
+	return {
+		c() {
+			t = text(t_value);
+		},
+		l(nodes) {
+			t = claim_text(nodes, t_value);
+		},
+		m(target, anchor) {
+			insert_hydration(target, t, anchor);
+		},
+		p(ctx, dirty) {
+			if (dirty & /*form*/ 1 && t_value !== (t_value = /*form*/ ctx[0].button_label + "")) set_data(t, t_value);
+		},
+		i: noop,
+		o: noop,
+		d(detaching) {
+			if (detaching) detach(t);
+		}
+	};
+}
+
+// (187:2) {#if graphics.left}
+function create_if_block_1(ctx) {
+	let img;
+	let img_src_value;
+	let img_alt_value;
+
+	return {
+		c() {
+			img = element("img");
+			this.h();
+		},
+		l(nodes) {
+			img = claim_element(nodes, "IMG", { class: true, src: true, alt: true });
+			this.h();
+		},
+		h() {
+			attr(img, "class", "graphic left svelte-16pn5km");
+			if (!src_url_equal(img.src, img_src_value = /*graphics*/ ctx[2].left.url)) attr(img, "src", img_src_value);
+			attr(img, "alt", img_alt_value = /*graphics*/ ctx[2].left.alt);
+		},
+		m(target, anchor) {
+			insert_hydration(target, img, anchor);
+		},
+		p(ctx, dirty) {
+			if (dirty & /*graphics*/ 4 && !src_url_equal(img.src, img_src_value = /*graphics*/ ctx[2].left.url)) {
+				attr(img, "src", img_src_value);
+			}
+
+			if (dirty & /*graphics*/ 4 && img_alt_value !== (img_alt_value = /*graphics*/ ctx[2].left.alt)) {
+				attr(img, "alt", img_alt_value);
+			}
+		},
+		d(detaching) {
+			if (detaching) detach(img);
+		}
+	};
+}
+
+// (190:2) {#if graphics.right}
+function create_if_block(ctx) {
+	let img;
+	let img_src_value;
+	let img_alt_value;
+
+	return {
+		c() {
+			img = element("img");
+			this.h();
+		},
+		l(nodes) {
+			img = claim_element(nodes, "IMG", { class: true, src: true, alt: true });
+			this.h();
+		},
+		h() {
+			attr(img, "class", "graphic right svelte-16pn5km");
+			if (!src_url_equal(img.src, img_src_value = /*graphics*/ ctx[2].right.url)) attr(img, "src", img_src_value);
+			attr(img, "alt", img_alt_value = /*graphics*/ ctx[2].right.alt);
+		},
+		m(target, anchor) {
+			insert_hydration(target, img, anchor);
+		},
+		p(ctx, dirty) {
+			if (dirty & /*graphics*/ 4 && !src_url_equal(img.src, img_src_value = /*graphics*/ ctx[2].right.url)) {
+				attr(img, "src", img_src_value);
+			}
+
+			if (dirty & /*graphics*/ 4 && img_alt_value !== (img_alt_value = /*graphics*/ ctx[2].right.alt)) {
+				attr(img, "alt", img_alt_value);
+			}
+		},
+		d(detaching) {
+			if (detaching) detach(img);
+		}
+	};
+}
+
+function create_fragment(ctx) {
+	let section;
+	let h1;
+	let t0;
+	let t1;
+	let current_block_type_index;
+	let if_block0;
+	let t2;
+	let t3;
+	let current;
+	const if_block_creators = [create_if_block_2, create_if_block_4, create_if_block_5];
+	const if_blocks = [];
+
+	function select_block_type(ctx, dirty) {
+		if (!/*submitted*/ ctx[4] && !/*error*/ ctx[5]) return 0;
+		if (/*submitted*/ ctx[4]) return 1;
+		if (/*error*/ ctx[5]) return 2;
+		return -1;
+	}
+
+	if (~(current_block_type_index = select_block_type(ctx))) {
+		if_block0 = if_blocks[current_block_type_index] = if_block_creators[current_block_type_index](ctx);
+	}
+
+	let if_block1 = /*graphics*/ ctx[2].left && create_if_block_1(ctx);
+	let if_block2 = /*graphics*/ ctx[2].right && create_if_block(ctx);
+
+	return {
+		c() {
+			section = element("section");
+			h1 = element("h1");
+			t0 = text(/*heading*/ ctx[1]);
+			t1 = space();
+			if (if_block0) if_block0.c();
+			t2 = space();
+			if (if_block1) if_block1.c();
+			t3 = space();
+			if (if_block2) if_block2.c();
+			this.h();
+		},
+		l(nodes) {
+			section = claim_element(nodes, "SECTION", { class: true });
+			var section_nodes = children(section);
+			h1 = claim_element(section_nodes, "H1", { class: true });
+			var h1_nodes = children(h1);
+			t0 = claim_text(h1_nodes, /*heading*/ ctx[1]);
+			h1_nodes.forEach(detach);
+			t1 = claim_space(section_nodes);
+			if (if_block0) if_block0.l(section_nodes);
+			t2 = claim_space(section_nodes);
+			if (if_block1) if_block1.l(section_nodes);
+			t3 = claim_space(section_nodes);
+			if (if_block2) if_block2.l(section_nodes);
+			section_nodes.forEach(detach);
+			this.h();
+		},
+		h() {
+			attr(h1, "class", "headline svelte-16pn5km");
+			attr(section, "class", "section-container svelte-16pn5km");
+		},
+		m(target, anchor) {
+			insert_hydration(target, section, anchor);
+			append_hydration(section, h1);
+			append_hydration(h1, t0);
+			append_hydration(section, t1);
+
+			if (~current_block_type_index) {
+				if_blocks[current_block_type_index].m(section, null);
+			}
+
+			append_hydration(section, t2);
+			if (if_block1) if_block1.m(section, null);
+			append_hydration(section, t3);
+			if (if_block2) if_block2.m(section, null);
+			current = true;
+		},
+		p(ctx, [dirty]) {
+			if (!current || dirty & /*heading*/ 2) set_data(t0, /*heading*/ ctx[1]);
+			let previous_block_index = current_block_type_index;
+			current_block_type_index = select_block_type(ctx);
+
+			if (current_block_type_index === previous_block_index) {
+				if (~current_block_type_index) {
+					if_blocks[current_block_type_index].p(ctx, dirty);
+				}
+			} else {
+				if (if_block0) {
+					group_outros();
+
+					transition_out(if_blocks[previous_block_index], 1, 1, () => {
+						if_blocks[previous_block_index] = null;
+					});
+
+					check_outros();
+				}
+
+				if (~current_block_type_index) {
+					if_block0 = if_blocks[current_block_type_index];
+
+					if (!if_block0) {
+						if_block0 = if_blocks[current_block_type_index] = if_block_creators[current_block_type_index](ctx);
+						if_block0.c();
+					} else {
+						if_block0.p(ctx, dirty);
+					}
+
+					transition_in(if_block0, 1);
+					if_block0.m(section, t2);
+				} else {
+					if_block0 = null;
+				}
+			}
+
+			if (/*graphics*/ ctx[2].left) {
+				if (if_block1) {
+					if_block1.p(ctx, dirty);
+				} else {
+					if_block1 = create_if_block_1(ctx);
+					if_block1.c();
+					if_block1.m(section, t3);
+				}
+			} else if (if_block1) {
+				if_block1.d(1);
+				if_block1 = null;
+			}
+
+			if (/*graphics*/ ctx[2].right) {
+				if (if_block2) {
+					if_block2.p(ctx, dirty);
+				} else {
+					if_block2 = create_if_block(ctx);
+					if_block2.c();
+					if_block2.m(section, null);
+				}
+			} else if (if_block2) {
+				if_block2.d(1);
+				if_block2 = null;
+			}
+		},
+		i(local) {
+			if (current) return;
+			transition_in(if_block0);
+			current = true;
+		},
+		o(local) {
+			transition_out(if_block0);
+			current = false;
+		},
+		d(detaching) {
+			if (detaching) detach(section);
+
+			if (~current_block_type_index) {
+				if_blocks[current_block_type_index].d();
+			}
+
+			if (if_block1) if_block1.d();
+			if (if_block2) if_block2.d();
+		}
+	};
+}
+
+function get_form_data(form) {
+	const form_data = new FormData(form);
+	var object = {};
+
+	form_data.forEach((value, key) => {
+		object[key] = value;
+	});
+
+	return object;
+}
+
+function instance($$self, $$props, $$invalidate) {
+	let { props } = $$props;
+	let { form } = $$props;
+	let { heading } = $$props;
+	let { graphics } = $$props;
+	let submitting = false;
+	let submitted = false;
+	let error = false;
+
+	async function submit_form(e) {
+		$$invalidate(3, submitting = true);
+		const form_data = get_form_data(e.target);
+		const { status } = await axios.post(form.endpoint, form_data).catch(e => ({ status: 400 }));
+
+		if (status === 200) {
+			$$invalidate(4, submitted = true);
+		} else {
+			$$invalidate(5, error = true);
+		}
+	}
+
+	$$self.$$set = $$props => {
+		if ('props' in $$props) $$invalidate(7, props = $$props.props);
+		if ('form' in $$props) $$invalidate(0, form = $$props.form);
+		if ('heading' in $$props) $$invalidate(1, heading = $$props.heading);
+		if ('graphics' in $$props) $$invalidate(2, graphics = $$props.graphics);
+	};
+
+	return [form, heading, graphics, submitting, submitted, error, submit_form, props];
+}
+
+class Component extends SvelteComponent {
 	constructor(options) {
 		super();
-		init(this, options, null, create_fragment$5, safe_not_equal, {});
+
+		init(this, options, instance, create_fragment, safe_not_equal, {
+			props: 7,
+			form: 0,
+			heading: 1,
+			graphics: 2
+		});
 	}
 }
 
-export default Component$6;
+export { Component as default };

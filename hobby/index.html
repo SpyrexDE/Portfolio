@@ -1,4 +1,3 @@
-
   <!DOCTYPE html>
   <html lang="en">
     <head>
@@ -109,14 +108,19 @@ a.link:hover {
             <div class="label career svelte-195jxa6">Career</div>
             <div class="label hobby svelte-195jxa6">Hobbys</div></div></div></div> 
 
-      <script type="module">      const path = window.location.pathname === '/' ? '' : window.location.pathname
-      const [ {default:App} ] = await Promise.all([
-        import(path + '/_module.js')
-      ]).catch(e => console.error(e))
-      new App({
-        target: document.querySelector('body'),
-        hydrate: true,
-      })</script>
+      <script type="module">
+      import('/_symbols/4ca71b88-611c-4171-8e75-0277f2ebb259.js')
+      .then(({default:App}) => {
+        
+            new App({
+              target: document.querySelector('#section-78b16a60'),
+              hydrate: true,
+              props: {"logo":{"image":{"alt":"Portfolio of Fabian Kessler","src":"https://snmjgwmbisbdshitvcmi.supabase.co/storage/v1/object/public/images/c4b279d1-26c1-48a7-b42d-92748ab1745f/1612183359674diamondIcon.svg","url":"https://snmjgwmbisbdshitvcmi.supabase.co/storage/v1/object/public/images/c4b279d1-26c1-48a7-b42d-92748ab1745f/1612183359674diamondIcon.svg","size":1},"title":"Fabian Kessler"},"site_nav":[{"link":{"url":"/","label":"Blog"}},{"link":{"url":"/","label":"Imprint"}}]}
+            })
+          
+      })
+      .catch(e => console.error(e))
+    </script>
     </body>
   </html>
   
