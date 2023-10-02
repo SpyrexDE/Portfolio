@@ -1,4 +1,4 @@
-// TimeLine - Updated September 28, 2023
+// TimeLine - Updated October 2, 2023
 function noop() { }
 function run(fn) {
     return fn();
@@ -561,7 +561,7 @@ function get_each_context(ctx, list, i) {
 	return child_ctx;
 }
 
-// (248:6) {#each entries as entry}
+// (249:6) {#each entries as entry}
 function create_each_block(ctx) {
 	let div4;
 	let div0;
@@ -654,24 +654,24 @@ function create_each_block(ctx) {
 			this.h();
 		},
 		h() {
-			attr(aside0, "class", "image svelte-1jb1ijs");
+			attr(aside0, "class", "image svelte-1qw9nr1");
 			attr(aside0, "x", "0");
 			attr(aside0, "y", "0");
 			attr(aside0, "height", "300");
 			if (!src_url_equal(aside0.src, aside0_src_value = /*images*/ ctx[0][15].image.url)) attr(aside0, "src", aside0_src_value);
-			attr(aside1, "class", "image svelte-1jb1ijs");
+			attr(aside1, "class", "image svelte-1qw9nr1");
 			attr(aside1, "x", "360");
 			attr(aside1, "y", "170");
 			attr(aside1, "height", "100");
 			if (!src_url_equal(aside1.src, aside1_src_value = /*images*/ ctx[0][0].image.url)) attr(aside1, "src", aside1_src_value);
 			attr(aside1, "animated", "true");
 			attr(aside1, "rounded", "10");
-			attr(div0, "class", "background svelte-1jb1ijs");
+			attr(div0, "class", "background svelte-1qw9nr1");
 			attr(div1, "class", "year");
-			attr(div2, "class", "title svelte-1jb1ijs");
-			attr(p, "class", "svelte-1jb1ijs");
+			attr(div2, "class", "title svelte-1qw9nr1");
+			attr(p, "class", "svelte-1qw9nr1");
 			attr(div3, "class", "body");
-			attr(div4, "class", "entry svelte-1jb1ijs");
+			attr(div4, "class", "entry svelte-1qw9nr1");
 		},
 		m(target, anchor) {
 			insert_hydration(target, div4, anchor);
@@ -712,9 +712,8 @@ function create_each_block(ctx) {
 function create_fragment(ctx) {
 	let div2;
 	let div0;
-	let t0;
+	let t;
 	let div1;
-	let t1;
 	let each_value = /*entries*/ ctx[1];
 	let each_blocks = [];
 
@@ -726,14 +725,13 @@ function create_fragment(ctx) {
 		c() {
 			div2 = element("div");
 			div0 = element("div");
-			t0 = space();
+			t = space();
 			div1 = element("div");
 
 			for (let i = 0; i < each_blocks.length; i += 1) {
 				each_blocks[i].c();
 			}
 
-			t1 = space();
 			this.h();
 		},
 		l(nodes) {
@@ -741,7 +739,7 @@ function create_fragment(ctx) {
 			var div2_nodes = children(div2);
 			div0 = claim_element(div2_nodes, "DIV", { class: true });
 			children(div0).forEach(detach);
-			t0 = claim_space(div2_nodes);
+			t = claim_space(div2_nodes);
 			div1 = claim_element(div2_nodes, "DIV", { class: true });
 			var div1_nodes = children(div1);
 
@@ -750,19 +748,18 @@ function create_fragment(ctx) {
 			}
 
 			div1_nodes.forEach(detach);
-			t1 = claim_space(div2_nodes);
 			div2_nodes.forEach(detach);
 			this.h();
 		},
 		h() {
-			attr(div0, "class", "gradient-overlay svelte-1jb1ijs");
-			attr(div1, "class", "entries svelte-1jb1ijs");
-			attr(div2, "class", "timeline svelte-1jb1ijs");
+			attr(div0, "class", "gradient-overlay svelte-1qw9nr1");
+			attr(div1, "class", "entries svelte-1qw9nr1");
+			attr(div2, "class", "timeline svelte-1qw9nr1");
 		},
 		m(target, anchor) {
 			insert_hydration(target, div2, anchor);
 			append_hydration(div2, div0);
-			append_hydration(div2, t0);
+			append_hydration(div2, t);
 			append_hydration(div2, div1);
 
 			for (let i = 0; i < each_blocks.length; i += 1) {
@@ -770,8 +767,6 @@ function create_fragment(ctx) {
 					each_blocks[i].m(div1, null);
 				}
 			}
-
-			append_hydration(div2, t1);
 		},
 		p(ctx, [dirty]) {
 			if (dirty & /*entries, images*/ 3) {
