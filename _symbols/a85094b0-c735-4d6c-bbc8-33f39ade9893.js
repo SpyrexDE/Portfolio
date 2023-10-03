@@ -584,7 +584,7 @@ function create_if_block_1(ctx) {
 			this.h();
 		},
 		h() {
-			attr(aside, "class", "image svelte-1782tq0");
+			attr(aside, "class", "image svelte-1e1fxsn");
 			attr(aside, "x", "0");
 			attr(aside, "y", "0");
 			attr(aside, "height", "300");
@@ -629,7 +629,7 @@ function create_if_block(ctx) {
 			this.h();
 		},
 		h() {
-			attr(aside, "class", "image svelte-1782tq0");
+			attr(aside, "class", "image svelte-1e1fxsn");
 			attr(aside, "x", "360");
 			attr(aside, "y", "170");
 			attr(aside, "height", "100");
@@ -722,12 +722,12 @@ function create_each_block(ctx) {
 			this.h();
 		},
 		h() {
-			attr(div0, "class", "background svelte-1782tq0");
+			attr(div0, "class", "background svelte-1e1fxsn");
 			attr(div1, "class", "year");
-			attr(div2, "class", "title svelte-1782tq0");
-			attr(p, "class", "svelte-1782tq0");
+			attr(div2, "class", "title svelte-1e1fxsn");
+			attr(p, "class", "svelte-1e1fxsn");
 			attr(div3, "class", "body");
-			attr(div4, "class", "entry svelte-1782tq0");
+			attr(div4, "class", "entry svelte-1e1fxsn");
 		},
 		m(target, anchor) {
 			insert_hydration(target, div4, anchor);
@@ -828,9 +828,9 @@ function create_fragment(ctx) {
 			this.h();
 		},
 		h() {
-			attr(div0, "class", "gradient-overlay svelte-1782tq0");
-			attr(div1, "class", "entries svelte-1782tq0");
-			attr(div2, "class", "timeline svelte-1782tq0");
+			attr(div0, "class", "gradient-overlay svelte-1e1fxsn");
+			attr(div1, "class", "entries svelte-1e1fxsn");
+			attr(div2, "class", "timeline svelte-1e1fxsn");
 		},
 		m(target, anchor) {
 			insert_hydration(target, div2, anchor);
