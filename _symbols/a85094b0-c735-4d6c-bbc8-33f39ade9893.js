@@ -635,7 +635,7 @@ function create_if_block(ctx) {
 			attr(aside, "height", "100");
 			if (!src_url_equal(aside.src, aside_src_value = /*entry*/ ctx[2].icon.url)) attr(aside, "src", aside_src_value);
 			attr(aside, "animated", "true");
-			attr(aside, "rounded", "10");
+			attr(aside, "rounded", "100");
 		},
 		m(target, anchor) {
 			insert_hydration(target, aside, anchor);
