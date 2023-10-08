@@ -1,4 +1,4 @@
-// TimeLine - Updated October 7, 2023
+// TimeLine - Updated October 8, 2023
 function noop() { }
 function run(fn) {
     return fn();
@@ -561,7 +561,7 @@ function get_each_context(ctx, list, i) {
 	return child_ctx;
 }
 
-// (253:14) {#if entry.bg}
+// (255:14) {#if entry.bg}
 function create_if_block_1(ctx) {
 	let aside;
 	let aside_src_value;
@@ -584,7 +584,7 @@ function create_if_block_1(ctx) {
 			this.h();
 		},
 		h() {
-			attr(aside, "class", "image svelte-1e1fxsn");
+			attr(aside, "class", "image svelte-1xn1lij");
 			attr(aside, "x", "0");
 			attr(aside, "y", "0");
 			attr(aside, "height", "300");
@@ -604,7 +604,7 @@ function create_if_block_1(ctx) {
 	};
 }
 
-// (254:14) {#if entry.icon}
+// (256:14) {#if entry.icon}
 function create_if_block(ctx) {
 	let aside;
 	let aside_src_value;
@@ -629,7 +629,7 @@ function create_if_block(ctx) {
 			this.h();
 		},
 		h() {
-			attr(aside, "class", "image svelte-1e1fxsn");
+			attr(aside, "class", "image svelte-1xn1lij");
 			attr(aside, "x", "360");
 			attr(aside, "y", "170");
 			attr(aside, "height", "100");
@@ -651,7 +651,7 @@ function create_if_block(ctx) {
 	};
 }
 
-// (250:6) {#each entries as entry}
+// (252:6) {#each entries as entry}
 function create_each_block(ctx) {
 	let div4;
 	let div0;
@@ -722,12 +722,12 @@ function create_each_block(ctx) {
 			this.h();
 		},
 		h() {
-			attr(div0, "class", "background svelte-1e1fxsn");
+			attr(div0, "class", "background svelte-1xn1lij");
 			attr(div1, "class", "year");
-			attr(div2, "class", "title svelte-1e1fxsn");
-			attr(p, "class", "svelte-1e1fxsn");
+			attr(div2, "class", "title svelte-1xn1lij");
+			attr(p, "class", "svelte-1xn1lij");
 			attr(div3, "class", "body");
-			attr(div4, "class", "entry svelte-1e1fxsn");
+			attr(div4, "class", "entry svelte-1xn1lij");
 		},
 		m(target, anchor) {
 			insert_hydration(target, div4, anchor);
@@ -828,9 +828,9 @@ function create_fragment(ctx) {
 			this.h();
 		},
 		h() {
-			attr(div0, "class", "gradient-overlay svelte-1e1fxsn");
-			attr(div1, "class", "entries svelte-1e1fxsn");
-			attr(div2, "class", "timeline svelte-1e1fxsn");
+			attr(div0, "class", "gradient-overlay svelte-1xn1lij");
+			attr(div1, "class", "entries svelte-1xn1lij");
+			attr(div2, "class", "timeline svelte-1xn1lij");
 		},
 		m(target, anchor) {
 			insert_hydration(target, div2, anchor);
@@ -902,6 +902,7 @@ function updateImageBackgrounds() {
 
 			// Add background image styles to the image element
 			const style = `
+        opacity: 1;
         height: ${height}px;
         width: ${widthInPixels}px;
         background-image: url(${imageUrl});
