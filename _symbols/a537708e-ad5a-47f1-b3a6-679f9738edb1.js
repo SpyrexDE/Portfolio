@@ -2808,7 +2808,7 @@ function get_each_context(ctx, list, i) {
 	return child_ctx;
 }
 
-// (88:8) {#each social_links as {link, icon}}
+// (92:8) {#each social_links as {link, icon}}
 function create_each_block(ctx) {
 	let li;
 	let a;
@@ -2847,7 +2847,7 @@ function create_each_block(ctx) {
 		h() {
 			attr(a, "href", a_href_value = /*link*/ ctx[4].url);
 			attr(a, "aria-label", a_aria_label_value = /*icon*/ ctx[5]);
-			attr(a, "class", "svelte-u3dufv");
+			attr(a, "class", "svelte-k13ecq");
 		},
 		m(target, anchor) {
 			insert_hydration(target, li, anchor);
@@ -2896,12 +2896,9 @@ function create_fragment(ctx) {
 	let t2_value = new Date().getFullYear() + "";
 	let t2;
 	let t3;
-	let span2;
-	let t4;
 	let span1;
+	let t4;
 	let t5;
-	let t6;
-	let t7;
 	let ul;
 	let current;
 	let each_value = /*social_links*/ ctx[0];
@@ -2926,12 +2923,9 @@ function create_fragment(ctx) {
 			t1 = text("Copyright ");
 			t2 = text(t2_value);
 			t3 = space();
-			span2 = element("span");
-			t4 = text("Made by Fabian with ");
 			span1 = element("span");
-			t5 = text("♥");
-			t6 = text(" ☕");
-			t7 = space();
+			t4 = text("Made by Fabian with  ☕");
+			t5 = space();
 			ul = element("ul");
 
 			for (let i = 0; i < each_blocks.length; i += 1) {
@@ -2955,16 +2949,11 @@ function create_fragment(ctx) {
 			t2 = claim_text(span0_nodes, t2_value);
 			span0_nodes.forEach(detach);
 			t3 = claim_space(div0_nodes);
-			span2 = claim_element(div0_nodes, "SPAN", { class: true });
-			var span2_nodes = children(span2);
-			t4 = claim_text(span2_nodes, "Made by Fabian with ");
-			span1 = claim_element(span2_nodes, "SPAN", { class: true });
+			span1 = claim_element(div0_nodes, "SPAN", { class: true });
 			var span1_nodes = children(span1);
-			t5 = claim_text(span1_nodes, "♥");
+			t4 = claim_text(span1_nodes, "Made by Fabian with  ☕");
 			span1_nodes.forEach(detach);
-			t6 = claim_text(span2_nodes, " ☕");
-			span2_nodes.forEach(detach);
-			t7 = claim_space(div0_nodes);
+			t5 = claim_space(div0_nodes);
 			ul = claim_element(div0_nodes, "UL", { class: true });
 			var ul_nodes = children(ul);
 
@@ -2979,13 +2968,12 @@ function create_fragment(ctx) {
 			this.h();
 		},
 		h() {
-			attr(hr, "class", "svelte-u3dufv");
-			attr(span0, "class", "copyright svelte-u3dufv");
-			attr(span1, "class", "strikethrough svelte-u3dufv");
-			attr(span2, "class", "me svelte-u3dufv");
-			attr(ul, "class", "svelte-u3dufv");
-			attr(div0, "class", "footer svelte-u3dufv");
-			attr(div1, "class", "section-container svelte-u3dufv");
+			attr(hr, "class", "svelte-k13ecq");
+			attr(span0, "class", "copyright svelte-k13ecq");
+			attr(span1, "class", "me svelte-k13ecq");
+			attr(ul, "class", "svelte-k13ecq");
+			attr(div0, "class", "footer svelte-k13ecq");
+			attr(div1, "class", "section-container svelte-k13ecq");
 		},
 		m(target, anchor) {
 			insert_hydration(target, footer, anchor);
@@ -2997,12 +2985,9 @@ function create_fragment(ctx) {
 			append_hydration(span0, t1);
 			append_hydration(span0, t2);
 			append_hydration(div0, t3);
-			append_hydration(div0, span2);
-			append_hydration(span2, t4);
-			append_hydration(span2, span1);
-			append_hydration(span1, t5);
-			append_hydration(span2, t6);
-			append_hydration(div0, t7);
+			append_hydration(div0, span1);
+			append_hydration(span1, t4);
+			append_hydration(div0, t5);
 			append_hydration(div0, ul);
 
 			for (let i = 0; i < each_blocks.length; i += 1) {
